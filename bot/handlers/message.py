@@ -13,7 +13,7 @@ from telegram.ext import ContextTypes
 
 from bot.database import BaseDatabase
 from bot.services.conversation import ConversationManager
-from bot.services.elevenlabs import ElevenLabsService
+from bot.services.elevenlabs import DEFAULT_VOICE_ID, ElevenLabsService
 from bot.services.groq import GroqService
 from bot.services.level_manager import LevelManager
 from bot.utils.keyboards import conversation_buttons
@@ -164,7 +164,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         audio_bytes = None
         usage_warning = ""
         if elevenlabs:
-            audio_bytes = await elevenlabs.generate_speech(display_text)
+            voice_id = context.user_data.get("voice_id", DEFAULT_VOICE_ID)
+            audio_bytes = await elevenlabs.generate_speech(display_text, voice_id=voice_id)
             if audio_bytes:
                 usage_warning = elevenlabs.get_usage_warning()
 

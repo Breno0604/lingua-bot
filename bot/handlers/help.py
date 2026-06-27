@@ -20,6 +20,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         "\u2022 Try saying something about your day! \U0001f5e3\ufe0f\n\n"
         "**Commands:**\n"
         "\u2022 `/level` - Check or change your English level (A1, A2, B1)\n"
+        "\u2022 `/voice` - Choose a voice for audio responses (5 voices available)\n"
         "\u2022 `/reset` - Clear conversation history and start fresh\n"
         "\u2022 `/vocab` - View your saved vocabulary list (filtered by level)\n"
         "\u2022 `/topic` - Get a suggested topic to practice\n\n"

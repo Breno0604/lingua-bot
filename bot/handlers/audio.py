@@ -18,7 +18,7 @@ from telegram.ext import ContextTypes
 from bot.database import BaseDatabase
 from bot.services.conversation import ConversationManager
 from bot.services.deepgram import DeepgramService
-from bot.services.elevenlabs import ElevenLabsService
+from bot.services.elevenlabs import DEFAULT_VOICE_ID, ElevenLabsService
 from bot.services.groq import GroqService
 from bot.services.level_manager import LevelManager
 from bot.utils.keyboards import conversation_buttons
@@ -140,7 +140,8 @@ async def handle_audio(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     display_text = clean_reply if clean_reply else reply
 
     # 7. Gera audio da resposta com ElevenLabs (so para conversas)
-    audio_bytes = await elevenlabs.generate_speech(display_text)
+    voice_id = context.user_data.get("voice_id", DEFAULT_VOICE_ID)
+    audio_bytes = await elevenlabs.generate_speech(display_text, voice_id=voice_id)
     usage_warning = elevenlabs.get_usage_warning() if audio_bytes else ""
 
     if audio_bytes:

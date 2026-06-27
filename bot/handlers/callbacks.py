@@ -17,7 +17,7 @@ from telegram.ext import ContextTypes
 
 from bot.database import BaseDatabase
 from bot.services.conversation import ConversationManager
-from bot.services.elevenlabs import ElevenLabsService
+from bot.services.elevenlabs import DEFAULT_VOICE_ID, ElevenLabsService
 from bot.services.groq import GroqService
 from bot.services.level_manager import LevelManager
 from bot.utils.formatting import TOPICS, format_topic_suggestion, get_random_topic
@@ -143,6 +143,11 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     # Audio: Listen Again
     elif data == "listen_again":
         await _listen_again(query, context)
+
+    # Selecao de voz
+    elif data.startswith("set_voice_"):
+        voice_id = data[len("set_voice_"):]
+        await _set_voice(query, context, voice_id)
 
     # Gerenciamento de nivel
     elif data.startswith("set_level_"):
@@ -543,6 +548,45 @@ async def _call_groq_for(
 # ──────────────────────────────────────────────
 
 
+async def _set_voice(query, context: ContextTypes.DEFAULT_TYPE, voice_id: str) -> None:
+    """Define a voz do usuario e confirma."""
+    from bot.services.elevenlabs import VOICE_MAP
+
+    elevenlabs = context.bot_data.get("elevenlabs")
+    if not elevenlabs:
+        await query.edit_message_text(
+            "Sorry, audio services aren't configured. \U0001f3b6",
+            reply_markup=back_to_menu_button(),
+        )
+        return
+
+    # Valida o voice_id
+    if voice_id not in VOICE_MAP:
+        await query.edit_message_text(
+            "Invalid voice selection.",
+            reply_markup=back_to_menu_button(),
+        )
+        return
+
+    name, desc = VOICE_MAP[voice_id]
+
+    # Salva a preferencia do usuario
+    context.user_data["voice_id"] = voice_id
+
+    text = (
+        f"\u2705 **Voice updated to {name}!**\n\n"
+        f"{desc}\n\n"
+        "I'll use this voice for my audio responses. "
+        "You can change it anytime with /voice"
+    )
+
+    await query.edit_message_text(
+        text,
+        reply_markup=back_to_menu_button(),
+        parse_mode="Markdown",
+    )
+
+
 async def _listen_again(query, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Regenera o audio da ultima resposta do assistente.
 
@@ -587,8 +631,11 @@ async def _listen_again(query, context: ContextTypes.DEFAULT_TYPE) -> None:
     # Mostra loading
     await query.edit_message_text("\U0001f50a Generating audio...")
 
-    # Gera audio
-    audio_bytes = await elevenlabs.generate_speech(last_assistant_msg)
+    # Obtem a voz preferida do usuario (padrao: Rachel)
+    voice_id = context.user_data.get("voice_id", DEFAULT_VOICE_ID)
+
+    # Gera audio com a voz do usuario
+    audio_bytes = await elevenlabs.generate_speech(last_assistant_msg, voice_id=voice_id)
 
     if not audio_bytes:
         await query.edit_message_text(

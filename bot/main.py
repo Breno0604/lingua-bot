@@ -27,6 +27,7 @@ from bot.handlers.error_handler import error_handler
 from bot.handlers.help import help_command
 from bot.handlers.level_command import level_command
 from bot.handlers.message import handle_message
+from bot.handlers.voice_command import voice_command
 from bot.handlers.start import start
 from bot.services.conversation import ConversationManager
 from bot.services.deepgram import DeepgramService
@@ -85,6 +86,7 @@ def build_application() -> Application:
     application.add_handler(CommandHandler("vocab", vocab_command))
     application.add_handler(CommandHandler("topic", topic_command))
     application.add_handler(CommandHandler("level", level_command))
+    application.add_handler(CommandHandler("voice", voice_command))
 
     # --- Handler de Callbacks (botoes inline) ---
     application.add_handler(CallbackQueryHandler(handle_callback))

@@ -143,6 +143,17 @@ def level_selection_keyboard(current_level: str = "A1") -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(keyboard)
 
 
+def voice_selection_keyboard(current_voice_id: str) -> InlineKeyboardMarkup:
+    """Botoes para escolha de voz. SEM compressao — sempre visivel."""
+    from bot.services.elevenlabs import VOICES
+
+    keyboard = []
+    for vid, name, desc in VOICES:
+        label = f"\U0001f50a {name}" if vid == current_voice_id else f"{name}"
+        keyboard.append([InlineKeyboardButton(label, callback_data=f"set_voice_{vid}")])
+    return InlineKeyboardMarkup(keyboard)
+
+
 def back_to_menu_button() -> InlineKeyboardMarkup:
     """Botao simples de voltar ao menu. SEM compressao — ja e um unico botao."""
     keyboard = [[InlineKeyboardButton("\U0001f519 Back to Menu", callback_data="back_to_menu")]]
