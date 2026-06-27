@@ -20,6 +20,7 @@ from telegram.ext import (
 
 from bot.config import load_config
 from bot.database import create_database
+from bot.handlers.audio import handle_audio
 from bot.handlers.callbacks import handle_callback
 from bot.handlers.commands import reset_command, topic_command, vocab_command
 from bot.handlers.error_handler import error_handler
@@ -28,6 +29,8 @@ from bot.handlers.level_command import level_command
 from bot.handlers.message import handle_message
 from bot.handlers.start import start
 from bot.services.conversation import ConversationManager
+from bot.services.deepgram import DeepgramService
+from bot.services.elevenlabs import ElevenLabsService
 from bot.services.groq import GroqService
 from bot.services.level_manager import LevelManager
 from bot.utils.rate_limiter import RateLimiter
@@ -59,6 +62,22 @@ def build_application() -> Application:
     application.bot_data["rate_limiter"] = rate_limiter
     application.bot_data["level_manager"] = level_mgr
 
+    # Servicos de audio (so se as chaves estiverem configuradas)
+    if config.deepgram_api_key and config.elevenlabs_api_key:
+        deepgram_service = DeepgramService(config.deepgram_api_key)
+        elevenlabs_service = ElevenLabsService(
+            api_key=config.elevenlabs_api_key,
+            deepgram_service=deepgram_service,
+        )
+        application.bot_data["deepgram"] = deepgram_service
+        application.bot_data["elevenlabs"] = elevenlabs_service
+        logger.info("Servicos de audio inicializados (Deepgram + ElevenLabs)")
+    else:
+        logger.info(
+            "Chaves de audio nao configuradas — pulando servicos de audio. "
+            "Defina DEEPGRAM_API_KEY e ELEVENLABS_API_KEY no .env"
+        )
+
     # --- Handlers de Comandos ---
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("help", help_command))
@@ -69,6 +88,12 @@ def build_application() -> Application:
 
     # --- Handler de Callbacks (botoes inline) ---
     application.add_handler(CallbackQueryHandler(handle_callback))
+
+    # --- Handler de Mensagens de Audio ---
+    if config.deepgram_api_key and config.elevenlabs_api_key:
+        application.add_handler(
+            MessageHandler(filters.VOICE | filters.AUDIO, handle_audio)
+        )
 
     # --- Handler de Mensagens de Texto ---
     application.add_handler(

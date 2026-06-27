@@ -16,6 +16,11 @@ MORE_BUTTON = InlineKeyboardButton("\u2795 More Options", callback_data="show_mo
 HIDE_BUTTON = InlineKeyboardButton("\u25c0 Hide Options", callback_data="hide_options")
 
 
+def listen_again_button() -> InlineKeyboardButton:
+    """Botao para ouvir a resposta novamente em audio."""
+    return InlineKeyboardButton("\U0001f50a Listen Again", callback_data="listen_again")
+
+
 def collapse_keyboard(
     expanded_keyboard: list[list[InlineKeyboardButton]],
     expanded: bool = False,
@@ -53,8 +58,13 @@ def main_menu(expanded: bool = False) -> InlineKeyboardMarkup:
     return collapse_keyboard(keyboard, expanded=expanded)
 
 
-def conversation_buttons(expanded: bool = False) -> InlineKeyboardMarkup:
-    """Botoes exibidos apos cada resposta do bot."""
+def conversation_buttons(expanded: bool = False, has_audio: bool = False) -> InlineKeyboardMarkup:
+    """Botoes exibidos apos cada resposta do bot.
+
+    Args:
+        expanded: Se True, mostra todos os botoes + Hide.
+        has_audio: Se True e expanded=True, inclui o botao Listen Again.
+    """
     keyboard = [
         [
             InlineKeyboardButton("\U0001f4dd More Examples", callback_data="more_examples"),
@@ -64,6 +74,8 @@ def conversation_buttons(expanded: bool = False) -> InlineKeyboardMarkup:
             InlineKeyboardButton("\U0001f3af Practice This", callback_data="practice_this"),
         ],
     ]
+    if has_audio:
+        keyboard.append([listen_again_button()])
     return collapse_keyboard(keyboard, expanded=expanded)
 
 

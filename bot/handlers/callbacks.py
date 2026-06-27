@@ -17,6 +17,7 @@ from telegram.ext import ContextTypes
 
 from bot.database import BaseDatabase
 from bot.services.conversation import ConversationManager
+from bot.services.elevenlabs import ElevenLabsService
 from bot.services.groq import GroqService
 from bot.services.level_manager import LevelManager
 from bot.utils.formatting import TOPICS, format_topic_suggestion, get_random_topic
@@ -57,7 +58,8 @@ def _get_keyboard_for_screen(context: ContextTypes.DEFAULT_TYPE, expanded: bool 
     elif screen_type == "topics":
         return topics_menu(expanded=expanded)
     else:  # "conversation"
-        return conversation_buttons(expanded=expanded)
+        has_audio = context.user_data.get("has_audio", False)
+        return conversation_buttons(expanded=expanded, has_audio=has_audio)
 
 
 async def _expand_options(query, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -137,6 +139,10 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     elif data.startswith("start_topic_"):
         topic_name = data[len("start_topic_"):]
         await _start_topic(query, context, topic_name)
+
+    # Audio: Listen Again
+    elif data == "listen_again":
+        await _listen_again(query, context)
 
     # Gerenciamento de nivel
     elif data.startswith("set_level_"):
@@ -530,3 +536,78 @@ async def _call_groq_for(
             "Sorry, I had trouble thinking of something. Let's try again! \U0001f60a",
             reply_markup=conversation_buttons(expanded=False),
         )
+
+
+# ──────────────────────────────────────────────
+# Audio: Listen Again
+# ──────────────────────────────────────────────
+
+
+async def _listen_again(query, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Regenera o audio da ultima resposta do assistente.
+
+    Pega o texto da ultima resposta na conversa, gera audio
+    via ElevenLabs e envia como nova mensagem de voz.
+    """
+    user_id = query.from_user.id
+    conv_mgr: ConversationManager = context.bot_data.get("conversation_mgr")
+    elevenlabs: ElevenLabsService = context.bot_data.get("elevenlabs")
+
+    if not conv_mgr or not elevenlabs:
+        await query.edit_message_text(
+            "Sorry, I'm not ready yet. Please try /start again! \U0001f64f",
+            reply_markup=back_to_menu_button(),
+        )
+        return
+
+    conv = conv_mgr.get_or_create(user_id)
+    history = conv.get_history()
+
+    if not history:
+        await query.edit_message_text(
+            "Let's have a conversation first! Type something and I'll help you practice! \U0001f60a",
+            reply_markup=back_to_menu_button(),
+        )
+        return
+
+    # Pega o texto da ultima resposta do assistente
+    last_assistant_msg = None
+    for role, msg in reversed(history):
+        if role == "assistant":
+            last_assistant_msg = msg
+            break
+
+    if not last_assistant_msg:
+        await query.edit_message_text(
+            "I don't have a recent response to read. Let's keep talking! \U0001f60a",
+            reply_markup=back_to_menu_button(),
+        )
+        return
+
+    # Mostra loading
+    await query.edit_message_text("\U0001f50a Generating audio...")
+
+    # Gera audio
+    audio_bytes = await elevenlabs.generate_speech(last_assistant_msg)
+
+    if not audio_bytes:
+        await query.edit_message_text(
+            "Sorry, I couldn't generate audio right now. "
+            "Please try again later! \U0001f3b6",
+            reply_markup=back_to_menu_button(),
+        )
+        return
+
+    # O texto truncado para audio (usa o mesmo truncamento do ElevenLabs)
+    truncated_text = elevenlabs._truncate_text(last_assistant_msg, max_chars=100)
+
+    # Envia como nova mensagem de voz (reply a mensagem original)
+    await query.message.reply_voice(
+        voice=audio_bytes,
+        caption=f"\U0001f50a *Listen Again:*\n\n{truncated_text}",
+        reply_markup=conversation_buttons(expanded=False, has_audio=True),
+        parse_mode="Markdown",
+    )
+
+    # Remove a mensagem de loading
+    await query.delete_message()

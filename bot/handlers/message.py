@@ -13,6 +13,7 @@ from telegram.ext import ContextTypes
 
 from bot.database import BaseDatabase
 from bot.services.conversation import ConversationManager
+from bot.services.elevenlabs import ElevenLabsService
 from bot.services.groq import GroqService
 from bot.services.level_manager import LevelManager
 from bot.utils.keyboards import conversation_buttons
@@ -158,10 +159,32 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         # Marca tela como conversa e mostra botoes COMPRIMIDOS
         context.user_data["screen_type"] = "conversation"
 
-        await update.message.reply_text(
-            display_text,
-            reply_markup=conversation_buttons(expanded=False),
-        )
+        # Gera audio da resposta (apenas para conversas)
+        elevenlabs: ElevenLabsService = context.bot_data.get("elevenlabs")
+        audio_bytes = None
+        usage_warning = ""
+        if elevenlabs:
+            audio_bytes = await elevenlabs.generate_speech(display_text)
+            if audio_bytes:
+                usage_warning = elevenlabs.get_usage_warning()
+
+        final_text = display_text + usage_warning if usage_warning else display_text
+
+        if audio_bytes:
+            # Marca que esta mensagem tem audio para o botao Listen Again
+            context.user_data["has_audio"] = True
+
+            # Envia como nota de voz + texto
+            await update.message.reply_voice(
+                voice=audio_bytes,
+                caption=final_text,
+                reply_markup=conversation_buttons(expanded=False, has_audio=True),
+            )
+        else:
+            await update.message.reply_text(
+                final_text,
+                reply_markup=conversation_buttons(expanded=False),
+            )
     else:
         await update.message.reply_text(
             "Sorry, I'm having trouble thinking right now. "
