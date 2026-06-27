@@ -63,24 +63,26 @@ def _get_keyboard_for_screen(context: ContextTypes.DEFAULT_TYPE, expanded: bool 
 async def _expand_options(query, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Expande os botoes: substitui '+ More Options' pelos botoes reais + Hide."""
     original_text = query.message.text or ""
-    screen_type = context.user_data.get("screen_type", "conversation")
 
     # Feedback visual rapido: mostra loading antes de expandir
     try:
         await query.edit_message_text(
             original_text + "\n\n✨ Loading...",
-            parse_mode=query.message.parse_mode,
+            parse_mode="Markdown",
         )
         await asyncio.sleep(0.3)
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning("Loading animation skipped: %s", exc)
 
     expanded_keyboard = _get_keyboard_for_screen(context, expanded=True)
-    await query.edit_message_text(
-        original_text,
-        reply_markup=expanded_keyboard,
-        parse_mode=query.message.parse_mode,
-    )
+    try:
+        await query.edit_message_text(
+            original_text,
+            reply_markup=expanded_keyboard,
+            parse_mode="Markdown",
+        )
+    except Exception as exc:
+        logger.error("Falha ao expandir botoes: %s", exc)
 
 
 async def _collapse_options(query, context: ContextTypes.DEFAULT_TYPE) -> None:
