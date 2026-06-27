@@ -17,10 +17,12 @@ from telegram.ext import ContextTypes
 from bot.database import BaseDatabase
 from bot.services.conversation import ConversationManager
 from bot.services.groq import GroqService
+from bot.services.level_manager import LevelManager
 from bot.utils.formatting import TOPICS, format_topic_suggestion, get_random_topic
 from bot.utils.keyboards import (
     back_to_menu_button,
     conversation_buttons,
+    level_selection_keyboard,
     main_menu,
     topic_suggestion,
     topics_menu,
@@ -67,12 +69,51 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         topic_name = data[len("start_topic_"):]
         await _start_topic(query, context, topic_name)
 
+    # Gerenciamento de nivel
+    elif data.startswith("set_level_"):
+        level = data[len("set_level_"):]
+        await _set_level(query, context, level)
+
     else:
         logger.warning("Callback nao reconhecido: %s", data)
         await query.edit_message_text(
             "I didn't understand that option. Try /help to see what I can do! 😊",
             reply_markup=back_to_menu_button(),
         )
+
+
+async def _set_level(query, context: ContextTypes.DEFAULT_TYPE, level: str) -> None:
+    """Define o nivel do usuario e confirma."""
+    user_id = query.from_user.id
+    level_mgr: LevelManager = context.bot_data.get("level_manager")
+
+    if not level_mgr:
+        await query.edit_message_text(
+            "Sorry, I'm not ready yet. Please try /start again! \U0001f64f"
+        )
+        return
+
+    if not level_mgr.set_level(user_id, level):
+        await query.edit_message_text(
+            f"Invalid level: {level}. Please choose A1, A2, or B1.",
+            reply_markup=back_to_menu_button(),
+        )
+        return
+
+    label = level_mgr.get_label(level)
+    confirmation = level_mgr.get_confirmation(level)
+
+    text = (
+        f"\u2705 **Level updated to {label}!**\n\n"
+        f"{confirmation}\n\n"
+        "You can change your level anytime with /level"
+    )
+
+    await query.edit_message_text(
+        text,
+        reply_markup=main_menu(),
+        parse_mode="Markdown",
+    )
 
 
 async def _show_menu(query, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -140,9 +181,10 @@ async def _show_vocab(query, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def _show_vocab_page(query, context: ContextTypes.DEFAULT_TYPE, page: int) -> None:
-    """Exibe uma pagina especifica do vocabulario."""
+    """Exibe uma pagina especifica do vocabulario, filtrada por nivel."""
     user_id = query.from_user.id
     db: BaseDatabase = context.bot_data.get("db")
+    level_mgr: LevelManager = context.bot_data.get("level_manager")
 
     if not db:
         await query.edit_message_text(
@@ -151,11 +193,13 @@ async def _show_vocab_page(query, context: ContextTypes.DEFAULT_TYPE, page: int)
         )
         return
 
+    # Filtra pelo nivel atual do usuario
+    user_level = level_mgr.get_level(user_id) if level_mgr else None
     page_size = 10
 
     try:
-        total = await db.get_vocab_count(user_id)
-        entries = await db.get_vocab(user_id, page=page, page_size=page_size)
+        total = await db.get_vocab_count(user_id, level=user_level)
+        entries = await db.get_vocab(user_id, page=page, page_size=page_size, level=user_level)
     except Exception as e:
         logger.error("Erro ao buscar vocabulario: %s", e)
         await query.edit_message_text(
@@ -197,6 +241,7 @@ async def _start_topic(query, context: ContextTypes.DEFAULT_TYPE, topic_name: st
     user_id = query.from_user.id
     groq: GroqService = context.bot_data.get("groq")
     conv_mgr: ConversationManager = context.bot_data.get("conversation_mgr")
+    level_mgr: LevelManager = context.bot_data.get("level_manager")
 
     if not groq or not conv_mgr:
         await query.edit_message_text(
@@ -235,8 +280,10 @@ async def _start_topic(query, context: ContextTypes.DEFAULT_TYPE, topic_name: st
         f"End with a question to engage the student."
     )
 
+    user_level = level_mgr.get_level(user_id) if level_mgr else "A1"
+
     try:
-        reply = await groq.generate_reply(history, instruction)
+        reply = await groq.generate_reply(history, instruction, level=user_level)
     except Exception as e:
         logger.error("Erro ao gerar introducao do topico: %s", e)
         reply = None
@@ -325,6 +372,7 @@ async def _call_groq_for(
     user_id = query.from_user.id
     groq: GroqService = context.bot_data.get("groq")
     conv_mgr: ConversationManager = context.bot_data.get("conversation_mgr")
+    level_mgr: LevelManager = context.bot_data.get("level_manager")
 
     if not groq or not conv_mgr:
         await query.edit_message_text(
@@ -334,6 +382,8 @@ async def _call_groq_for(
 
     # Mostra mensagem de carregamento
     await query.edit_message_text(loading_text)
+
+    user_level = level_mgr.get_level(user_id) if level_mgr else "A1"
 
     conv = conv_mgr.get_or_create(user_id)
     history = conv.get_formatted_history()
@@ -346,7 +396,7 @@ async def _call_groq_for(
         return
 
     try:
-        reply = await groq.generate_reply(history, prompt_suffix)
+        reply = await groq.generate_reply(history, prompt_suffix, level=user_level)
     except Exception as e:
         logger.error("Erro ao gerar resposta do callback: %s", e)
         reply = None

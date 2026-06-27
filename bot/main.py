@@ -24,10 +24,12 @@ from bot.handlers.callbacks import handle_callback
 from bot.handlers.commands import reset_command, topic_command, vocab_command
 from bot.handlers.error_handler import error_handler
 from bot.handlers.help import help_command
+from bot.handlers.level_command import level_command
 from bot.handlers.message import handle_message
 from bot.handlers.start import start
 from bot.services.conversation import ConversationManager
 from bot.services.groq import GroqService
+from bot.services.level_manager import LevelManager
 from bot.utils.rate_limiter import RateLimiter
 
 # Configuracao de logging basico
@@ -45,6 +47,7 @@ def build_application() -> Application:
     groq = GroqService(config)
     conversation_mgr = ConversationManager(max_turns=config.max_history_turns)
     rate_limiter = RateLimiter(daily_limit=config.daily_limit, persist=True)
+    level_mgr = LevelManager(default_level="A1")
 
     application = Application.builder().token(config.bot_token).build()
 
@@ -54,6 +57,7 @@ def build_application() -> Application:
     application.bot_data["groq"] = groq
     application.bot_data["conversation_mgr"] = conversation_mgr
     application.bot_data["rate_limiter"] = rate_limiter
+    application.bot_data["level_manager"] = level_mgr
 
     # --- Handlers de Comandos ---
     application.add_handler(CommandHandler("start", start))
@@ -61,6 +65,7 @@ def build_application() -> Application:
     application.add_handler(CommandHandler("reset", reset_command))
     application.add_handler(CommandHandler("vocab", vocab_command))
     application.add_handler(CommandHandler("topic", topic_command))
+    application.add_handler(CommandHandler("level", level_command))
 
     # --- Handler de Callbacks (botoes inline) ---
     application.add_handler(CallbackQueryHandler(handle_callback))

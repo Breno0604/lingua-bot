@@ -14,6 +14,7 @@ from telegram.ext import ContextTypes
 from bot.database import BaseDatabase
 from bot.services.conversation import ConversationManager
 from bot.services.groq import GroqService
+from bot.services.level_manager import LevelManager
 from bot.utils.keyboards import conversation_buttons
 from bot.utils.rate_limiter import RateLimiter
 
@@ -86,6 +87,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     conversation_mgr: ConversationManager = context.bot_data.get("conversation_mgr")
     db: BaseDatabase = context.bot_data.get("db")
     rate_limiter: RateLimiter = context.bot_data.get("rate_limiter")
+    level_mgr: LevelManager = context.bot_data.get("level_manager")
 
     if not groq or not conversation_mgr or not db:
         logger.error("Servicos nao inicializados no bot_data")
@@ -111,9 +113,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     # Gera historico formatado
     history = conv.get_formatted_history()
 
-    # Chama Groq
+    # Obtem nivel do usuario para adaptar o system prompt
+    user_level = level_mgr.get_level(user_id) if level_mgr else "A1"
+
+    # Chama Groq com nivel do usuario
     try:
-        reply = await groq.generate_reply(history, user_text)
+        reply = await groq.generate_reply(history, user_text, level=user_level)
     except Exception as e:
         logger.error("Erro ao gerar resposta: %s", e)
         reply = None
@@ -132,6 +137,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                     word=word_info["word"],
                     translation=word_info["translation"],
                     context=word_info["context"],
+                    level=user_level,
                 )
                 logger.info(
                     "Vocabulario salvo: %s = %s (user %d)",

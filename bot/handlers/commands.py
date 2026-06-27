@@ -15,6 +15,7 @@ from telegram.ext import ContextTypes
 from bot.database import BaseDatabase
 from bot.services.conversation import ConversationManager
 from bot.services.groq import GroqService
+from bot.services.level_manager import LevelManager
 from bot.utils.formatting import (
     format_topic_suggestion,
     format_vocab_list,
@@ -62,9 +63,10 @@ async def reset_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
 
 async def vocab_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle /vocab command. Shows saved vocabulary."""
+    """Handle /vocab command. Shows saved vocabulary filtered by user level."""
     user_id = update.effective_user.id
     db: BaseDatabase = context.bot_data.get("db")
+    level_mgr: LevelManager = context.bot_data.get("level_manager")
 
     if not db:
         await update.message.reply_text(
@@ -72,12 +74,15 @@ async def vocab_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         )
         return
 
+    # Filtra vocabulario pelo nivel atual do usuario
+    user_level = level_mgr.get_level(user_id) if level_mgr else None
+
     page = 1
     page_size = 10
 
     try:
-        total = await db.get_vocab_count(user_id)
-        entries = await db.get_vocab(user_id, page=page, page_size=page_size)
+        total = await db.get_vocab_count(user_id, level=user_level)
+        entries = await db.get_vocab(user_id, page=page, page_size=page_size, level=user_level)
     except Exception as e:
         logger.error("Erro ao buscar vocabulario: %s", e)
         await update.message.reply_text(

@@ -88,6 +88,19 @@ def topics_menu() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(keyboard)
 
 
+def level_selection_keyboard(current_level: str = "A1") -> InlineKeyboardMarkup:
+    """Botoes para escolha de nivel de ingles."""
+    from bot.services.level_manager import LevelManager
+
+    keyboard = []
+    for level in LevelManager.VALID_LEVELS:
+        label = LevelManager.LEVEL_LABELS[level]
+        if level == current_level:
+            label = f"\u2705 {label}"
+        keyboard.append([InlineKeyboardButton(label, callback_data=f"set_level_{level}")])
+    return InlineKeyboardMarkup(keyboard)
+
+
 def back_to_menu_button() -> InlineKeyboardMarkup:
     """Botao simples de voltar ao menu."""
     keyboard = [[InlineKeyboardButton("🔙 Back to Menu", callback_data="back_to_menu")]]

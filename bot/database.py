@@ -29,6 +29,7 @@ class VocabEntry:
     created_at: str
     reviewed_at: Optional[str]
     practice_count: int
+    level: str = "A1"
 
 
 class BaseDatabase(ABC):
@@ -36,20 +37,33 @@ class BaseDatabase(ABC):
 
     @abstractmethod
     async def save_vocab(
-        self, user_id: int, word: str, translation: str, context: str
+        self,
+        user_id: int,
+        word: str,
+        translation: str,
+        context: str = "",
+        level: str = "A1",
     ) -> None:
         """Salva uma nova palavra no vocabulario do usuario."""
         ...
 
     @abstractmethod
     async def get_vocab(
-        self, user_id: int, page: int = 1, page_size: int = 10
+        self,
+        user_id: int,
+        page: int = 1,
+        page_size: int = 10,
+        level: Optional[str] = None,
     ) -> list[VocabEntry]:
         """Retorna o vocabulario do usuario com paginacao."""
         ...
 
     @abstractmethod
-    async def get_vocab_count(self, user_id: int) -> int:
+    async def get_vocab_count(
+        self,
+        user_id: int,
+        level: Optional[str] = None,
+    ) -> int:
         """Retorna o total de palavras aprendidas pelo usuario."""
         ...
 
@@ -82,6 +96,7 @@ class SQLiteDatabase(BaseDatabase):
                     word TEXT NOT NULL,
                     translation TEXT NOT NULL,
                     context TEXT,
+                    level TEXT NOT NULL DEFAULT 'A1',
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     reviewed_at TIMESTAMP,
                     practice_count INTEGER DEFAULT 0,
@@ -93,32 +108,57 @@ class SQLiteDatabase(BaseDatabase):
             conn.close()
 
     async def save_vocab(
-        self, user_id: int, word: str, translation: str, context: str
+        self,
+        user_id: int,
+        word: str,
+        translation: str,
+        context: str = "",
+        level: str = "A1",
     ) -> None:
         conn = self._get_connection()
         try:
             conn.execute(
-                """INSERT OR IGNORE INTO vocabulary (user_id, word, translation, context)
-                   VALUES (?, ?, ?, ?)""",
-                (user_id, word.lower().strip(), translation.strip(), context),
+                """INSERT OR IGNORE INTO vocabulary
+                   (user_id, word, translation, context, level)
+                   VALUES (?, ?, ?, ?, ?)""",
+                (
+                    user_id,
+                    word.lower().strip(),
+                    translation.strip(),
+                    context,
+                    level.upper().strip(),
+                ),
             )
             conn.commit()
         finally:
             conn.close()
 
     async def get_vocab(
-        self, user_id: int, page: int = 1, page_size: int = 10
+        self,
+        user_id: int,
+        page: int = 1,
+        page_size: int = 10,
+        level: Optional[str] = None,
     ) -> list[VocabEntry]:
         offset = (page - 1) * page_size
         conn = self._get_connection()
         try:
-            rows = conn.execute(
-                """SELECT * FROM vocabulary
-                   WHERE user_id = ?
-                   ORDER BY created_at DESC
-                   LIMIT ? OFFSET ?""",
-                (user_id, page_size, offset),
-            ).fetchall()
+            if level:
+                rows = conn.execute(
+                    """SELECT * FROM vocabulary
+                       WHERE user_id = ? AND level = ?
+                       ORDER BY created_at DESC
+                       LIMIT ? OFFSET ?""",
+                    (user_id, level.upper(), page_size, offset),
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    """SELECT * FROM vocabulary
+                       WHERE user_id = ?
+                       ORDER BY created_at DESC
+                       LIMIT ? OFFSET ?""",
+                    (user_id, page_size, offset),
+                ).fetchall()
             return [
                 VocabEntry(
                     id=row["id"],
@@ -129,19 +169,30 @@ class SQLiteDatabase(BaseDatabase):
                     created_at=row["created_at"],
                     reviewed_at=row["reviewed_at"],
                     practice_count=row["practice_count"],
+                    level=row["level"],
                 )
                 for row in rows
             ]
         finally:
             conn.close()
 
-    async def get_vocab_count(self, user_id: int) -> int:
+    async def get_vocab_count(
+        self,
+        user_id: int,
+        level: Optional[str] = None,
+    ) -> int:
         conn = self._get_connection()
         try:
-            row = conn.execute(
-                "SELECT COUNT(*) as total FROM vocabulary WHERE user_id = ?",
-                (user_id,),
-            ).fetchone()
+            if level:
+                row = conn.execute(
+                    "SELECT COUNT(*) as total FROM vocabulary WHERE user_id = ? AND level = ?",
+                    (user_id, level.upper()),
+                ).fetchone()
+            else:
+                row = conn.execute(
+                    "SELECT COUNT(*) as total FROM vocabulary WHERE user_id = ?",
+                    (user_id,),
+                ).fetchone()
             return row["total"]
         finally:
             conn.close()
@@ -174,31 +225,43 @@ class SupabaseDatabase(BaseDatabase):
         self._client = create_client(supabase_url, supabase_key)
 
     async def save_vocab(
-        self, user_id: int, word: str, translation: str, context: str
+        self,
+        user_id: int,
+        word: str,
+        translation: str,
+        context: str = "",
+        level: str = "A1",
     ) -> None:
         data = {
             "user_id": user_id,
             "word": word.lower().strip(),
             "translation": translation.strip(),
             "context": context,
+            "level": level.upper().strip(),
         }
-        # Usa upsert para evitar duplicatas (UNIQUE constraint em user_id + word)
         self._client.table("vocabulary").upsert(
             data, on_conflict=["user_id", "word"]
         ).execute()
 
     async def get_vocab(
-        self, user_id: int, page: int = 1, page_size: int = 10
+        self,
+        user_id: int,
+        page: int = 1,
+        page_size: int = 10,
+        level: Optional[str] = None,
     ) -> list[VocabEntry]:
         offset = (page - 1) * page_size
-        response = (
+        query = (
             self._client.table("vocabulary")
             .select("*")
             .eq("user_id", user_id)
             .order("created_at", desc=True)
-            .range(offset, offset + page_size - 1)
-            .execute()
         )
+        if level:
+            query = query.eq("level", level.upper())
+
+        response = query.range(offset, offset + page_size - 1).execute()
+
         return [
             VocabEntry(
                 id=item["id"],
@@ -209,21 +272,28 @@ class SupabaseDatabase(BaseDatabase):
                 created_at=item["created_at"],
                 reviewed_at=item.get("reviewed_at"),
                 practice_count=item.get("practice_count", 0),
+                level=item.get("level", "A1"),
             )
             for item in response.data
         ]
 
-    async def get_vocab_count(self, user_id: int) -> int:
-        response = (
+    async def get_vocab_count(
+        self,
+        user_id: int,
+        level: Optional[str] = None,
+    ) -> int:
+        query = (
             self._client.table("vocabulary")
             .select("id", count="exact")
             .eq("user_id", user_id)
-            .execute()
         )
+        if level:
+            query = query.eq("level", level.upper())
+
+        response = query.execute()
         return response.count or 0
 
     async def practice_word(self, user_id: int, word_id: int) -> None:
-        # Primeiro busca o valor atual para incrementar
         response = (
             self._client.table("vocabulary")
             .select("practice_count")
