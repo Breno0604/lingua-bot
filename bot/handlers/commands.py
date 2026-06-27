@@ -44,12 +44,12 @@ async def reset_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
     conversation_mgr.reset(user_id)
 
-    # Sugere um topico apos o reset
+    # Sugere um topico apos o reset (topico e SEM compressao)
     topic = get_random_topic()
     suggestion = format_topic_suggestion(topic)
 
     text = (
-        "🔄 **Conversation reset!**\n\n"
+        "\U0001f504 **Conversation reset!**\n\n"
         "I've cleared our conversation history. "
         "Feel free to start a new topic!\n\n"
         f"{suggestion}"
@@ -93,7 +93,12 @@ async def vocab_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     text = format_vocab_list(entries, total, page=page, page_size=page_size)
     total_pages = max(1, (total + page_size - 1) // page_size)
 
-    reply_markup = vocab_pagination(page, total_pages) if entries else back_to_menu_button()
+    # Marca tela como vocabulario e mostra COMPRIMIDO (entrando na tela)
+    context.user_data["screen_type"] = "vocab"
+    context.user_data["page"] = page
+    context.user_data["total_pages"] = total_pages
+
+    reply_markup = vocab_pagination(page, total_pages, expanded=False) if entries else back_to_menu_button()
 
     await update.message.reply_text(
         text,
@@ -103,7 +108,8 @@ async def vocab_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
 
 async def topic_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle /topic command. Suggests a random practice topic."""
+    """Handle /topic command. Suggests a random practice topic.
+    Topic suggestion e SEM compressao — botoes sempre visiveis."""
     topic = get_random_topic()
     suggestion = format_topic_suggestion(topic)
 

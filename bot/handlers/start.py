@@ -38,7 +38,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     level_mgr: LevelManager = context.bot_data.get("level_manager")
 
     if level_mgr and not level_mgr.has_level(update.effective_user.id):
-        # Primeira vez: mostra escolha de nivel
+        # Primeira vez: mostra escolha de nivel (botoes SEM compressao)
         welcome_text = _get_welcome_text(first_name)
         await update.message.reply_text(
             welcome_text,
@@ -46,10 +46,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             parse_mode="Markdown",
         )
     else:
-        # Ja tem nivel: mostra menu normal
+        # Ja tem nivel: mostra menu principal COMPRIMIDO
         welcome_text = _get_level_choice_text(first_name)
+        context.user_data["screen_type"] = "menu"
         await update.message.reply_text(
             welcome_text,
-            reply_markup=main_menu(),
+            reply_markup=main_menu(expanded=False),
             parse_mode="Markdown",
         )

@@ -6,10 +6,11 @@ Processa cliques em botoes inline:
   - Acao: more_examples, explain_word, practice_this
   - Vocabulario: paginacao
   - Topicoss: iniciar conversa sobre topico especifico
+  - Expandir/recolher: show_more_options, hide_options
 """
 
+import asyncio
 import logging
-import random
 
 from telegram import Update
 from telegram.ext import ContextTypes
@@ -32,6 +33,66 @@ from bot.utils.keyboards import (
 logger = logging.getLogger(__name__)
 
 
+# ──────────────────────────────────────────────
+# Helpers de compressao de botoes
+# ──────────────────────────────────────────────
+
+def _set_screen_type(context: ContextTypes.DEFAULT_TYPE, screen_type: str, **kwargs) -> None:
+    """Armazena o tipo de tela atual e dados auxiliares no user_data."""
+    context.user_data["screen_type"] = screen_type
+    for key, value in kwargs.items():
+        context.user_data[key] = value
+
+
+def _get_keyboard_for_screen(context: ContextTypes.DEFAULT_TYPE, expanded: bool = False):
+    """Retorna o teclado apropriado para a tela atual, comprimido ou expandido."""
+    screen_type = context.user_data.get("screen_type", "conversation")
+    page = context.user_data.get("page", 1)
+    total_pages = context.user_data.get("total_pages", 1)
+
+    if screen_type == "menu":
+        return main_menu(expanded=expanded)
+    elif screen_type == "vocab":
+        return vocab_pagination(page, total_pages, expanded=expanded)
+    elif screen_type == "topics":
+        return topics_menu(expanded=expanded)
+    else:  # "conversation"
+        return conversation_buttons(expanded=expanded)
+
+
+async def _expand_options(query, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Expande os botoes: substitui '+ More Options' pelos botoes reais + Hide."""
+    original_text = query.message.text or ""
+    screen_type = context.user_data.get("screen_type", "conversation")
+
+    # Feedback visual rapido: mostra loading antes de expandir
+    try:
+        await query.edit_message_text(
+            original_text + "\n\n✨ Loading...",
+            parse_mode=query.message.parse_mode,
+        )
+        await asyncio.sleep(0.3)
+    except Exception:
+        pass
+
+    expanded_keyboard = _get_keyboard_for_screen(context, expanded=True)
+    await query.edit_message_text(
+        original_text,
+        reply_markup=expanded_keyboard,
+        parse_mode=query.message.parse_mode,
+    )
+
+
+async def _collapse_options(query, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Recolhe os botoes: substitui botoes por '+ More Options'."""
+    collapsed_keyboard = _get_keyboard_for_screen(context, expanded=False)
+    await query.edit_message_reply_markup(reply_markup=collapsed_keyboard)
+
+
+# ──────────────────────────────────────────────
+# Roteador Principal
+# ──────────────────────────────────────────────
+
 async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Roteia callbacks para os handlers apropriados."""
     query = update.callback_query
@@ -51,6 +112,12 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     elif data == "show_topics":
         await _show_topics(query, context)
 
+    # Expansao/recolhimento de botoes
+    elif data == "show_more_options":
+        await _expand_options(query, context)
+    elif data == "hide_options":
+        await _collapse_options(query, context)
+
     # Botoes de conversa
     elif data == "more_examples":
         await _more_examples(query, context)
@@ -59,7 +126,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     elif data == "practice_this":
         await _practice_this(query, context)
 
-    # Paginacao de vocabulario
+    # Paginacao de vocabulario (navegacao entre paginas: mantem expandido)
     elif data.startswith("vocab_page_"):
         page = int(data.split("_")[-1])
         await _show_vocab_page(query, context, page)
@@ -77,13 +144,17 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     else:
         logger.warning("Callback nao reconhecido: %s", data)
         await query.edit_message_text(
-            "I didn't understand that option. Try /help to see what I can do! 😊",
+            "I didn't understand that option. Try /help to see what I can do! \U0001f60a",
             reply_markup=back_to_menu_button(),
         )
 
 
+# ──────────────────────────────────────────────
+# Handlers Especificos
+# ──────────────────────────────────────────────
+
 async def _set_level(query, context: ContextTypes.DEFAULT_TYPE, level: str) -> None:
-    """Define o nivel do usuario e confirma."""
+    """Define o nivel do usuario e confirma. SEM compressao — nivel e sempre visivel."""
     user_id = query.from_user.id
     level_mgr: LevelManager = context.bot_data.get("level_manager")
 
@@ -117,16 +188,18 @@ async def _set_level(query, context: ContextTypes.DEFAULT_TYPE, level: str) -> N
 
 
 async def _show_menu(query, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Exibe o menu principal."""
+    """Exibe o menu principal (comprimido)."""
     from bot.handlers.start import _get_welcome_text
 
     user = query.from_user
     first_name = user.first_name if user else "there"
     welcome = _get_welcome_text(first_name)
 
+    _set_screen_type(context, "menu")
+
     await query.edit_message_text(
         welcome,
-        reply_markup=main_menu(),
+        reply_markup=main_menu(expanded=False),
         parse_mode="Markdown",
     )
 
@@ -134,26 +207,26 @@ async def _show_menu(query, context: ContextTypes.DEFAULT_TYPE) -> None:
 async def _show_how_it_works(query, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Exibe explicacao de como o bot funciona."""
     text = (
-        "❓ **How LinguaBot Works**\n\n"
+        "\u2753 **How LinguaBot Works**\n\n"
         "I'm your personal English teacher! Here's how to get the most out of me:\n\n"
-        "**1. Just start talking** 💬\n"
+        "**1. Just start talking** \U0001f4ac\n"
         "Type anything in English (or Portuguese) and I'll respond in English.\n\n"
-        "**2. I correct gently** 📝\n"
+        "**2. I correct gently** \U0001f4dd\n"
         "When you make mistakes, I'll:\n"
-        "• Point out what you did right first ✅\n"
-        "• Offer a simple correction 📖\n"
-        "• No more than 1-2 corrections at a time\n\n"
-        "**3. New vocabulary** 📚\n"
+        "\u2022 Point out what you did right first \u2705\n"
+        "\u2022 Offer a simple correction \U0001f4d6\n"
+        "\u2022 No more than 1-2 corrections at a time\n\n"
+        "**3. New vocabulary** \U0001f4da\n"
         "I introduce new words naturally. Use /vocab to see them all!\n\n"
-        "**4. Practice tools** 🎯\n"
+        "**4. Practice tools** \U0001f3af\n"
         "Use the buttons below my messages for extra practice.\n"
         "Use /topic to get a conversation topic.\n\n"
-        "**5. Tips for best results** 💡\n"
-        "• Don't worry about mistakes!\n"
-        "• Try to write in full sentences\n"
-        "• Practice a little every day\n"
-        "• Use /reset to start a fresh conversation\n\n"
-        "Ready? Just type something! 🚀"
+        "**5. Tips for best results** \U0001f4a1\n"
+        "\u2022 Don't worry about mistakes!\n"
+        "\u2022 Try to write in full sentences\n"
+        "\u2022 Practice a little every day\n"
+        "\u2022 Use /reset to start a fresh conversation\n\n"
+        "Ready? Just type something! \U0001f680"
     )
 
     await query.edit_message_text(
@@ -164,31 +237,36 @@ async def _show_how_it_works(query, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def _start_conversation(query, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Inicia uma conversa com sugestao de topico."""
+    """Inicia uma conversa com sugestao de topico. SEM compressao — botoes sempre visiveis."""
     topic = get_random_topic()
     suggestion = format_topic_suggestion(topic)
 
     await query.edit_message_text(
-        f"Great! Let's start practicing! 🎉\n\n{suggestion}",
+        f"Great! Let's start practicing! \U0001f389\n\n{suggestion}",
         reply_markup=topic_suggestion(topic[0]),
         parse_mode="Markdown",
     )
 
 
 async def _show_vocab(query, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Exibe o vocabulario do usuario (pagina 1)."""
+    """Exibe o vocabulario do usuario (pagina 1, comprimido)."""
     await _show_vocab_page(query, context, page=1)
 
 
 async def _show_vocab_page(query, context: ContextTypes.DEFAULT_TYPE, page: int) -> None:
-    """Exibe uma pagina especifica do vocabulario, filtrada por nivel."""
+    """Exibe uma pagina especifica do vocabulario, filtrada por nivel.
+
+    Quando o usuario esta navegando entre paginas (vocab_page_n),
+    o estado permanece EXPANDIDO para facilitar a navegacao.
+    Quando vem de outra tela, comeca COMPRIMIDO.
+    """
     user_id = query.from_user.id
     db: BaseDatabase = context.bot_data.get("db")
     level_mgr: LevelManager = context.bot_data.get("level_manager")
 
     if not db:
         await query.edit_message_text(
-            "Sorry, I'm not ready yet. Please try /start again! 🙏",
+            "Sorry, I'm not ready yet. Please try /start again! \U0001f64f",
             reply_markup=back_to_menu_button(),
         )
         return
@@ -203,7 +281,7 @@ async def _show_vocab_page(query, context: ContextTypes.DEFAULT_TYPE, page: int)
     except Exception as e:
         logger.error("Erro ao buscar vocabulario: %s", e)
         await query.edit_message_text(
-            "Sorry, I couldn't get your vocabulary right now. 🙏",
+            "Sorry, I couldn't get your vocabulary right now. \U0001f64f",
             reply_markup=back_to_menu_button(),
         )
         return
@@ -212,7 +290,17 @@ async def _show_vocab_page(query, context: ContextTypes.DEFAULT_TYPE, page: int)
 
     text = format_vocab_list(entries, total, page=page, page_size=page_size)
     total_pages = max(1, (total + page_size - 1) // page_size)
-    reply_markup = vocab_pagination(page, total_pages) if entries else back_to_menu_button()
+
+    # Se veio de callback vocab_page_n (navegacao), mantem EXPANDIDO
+    # Se veio de show_vocab (entrando na tela), comeca COMPRIMIDO
+    came_from_nav = query.data and query.data.startswith("vocab_page_")
+
+    _set_screen_type(context, "vocab", page=page, total_pages=total_pages)
+
+    if entries:
+        reply_markup = vocab_pagination(page, total_pages, expanded=came_from_nav)
+    else:
+        reply_markup = back_to_menu_button()
 
     await query.edit_message_text(
         text,
@@ -222,9 +310,11 @@ async def _show_vocab_page(query, context: ContextTypes.DEFAULT_TYPE, page: int)
 
 
 async def _show_topics(query, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Exibe o menu de topicos ou sugestao aleatoria."""
+    """Exibe o menu de topicos (comprimido)."""
     topic = get_random_topic()
     suggestion = format_topic_suggestion(topic)
+
+    _set_screen_type(context, "topics")
 
     await query.edit_message_text(
         suggestion,
@@ -236,7 +326,7 @@ async def _show_topics(query, context: ContextTypes.DEFAULT_TYPE) -> None:
 async def _start_topic(query, context: ContextTypes.DEFAULT_TYPE, topic_name: str) -> None:
     """
     Inicia uma conversa sobre um topico especifico.
-    Encontra o topico na lista e gera uma mensagem inicial via Groq.
+    Resposta vem EXPANDIDA para que o usuario ja veja as opcoes.
     """
     user_id = query.from_user.id
     groq: GroqService = context.bot_data.get("groq")
@@ -245,7 +335,7 @@ async def _start_topic(query, context: ContextTypes.DEFAULT_TYPE, topic_name: st
 
     if not groq or not conv_mgr:
         await query.edit_message_text(
-            "Sorry, I'm not ready yet. Please try /start again! 🙏",
+            "Sorry, I'm not ready yet. Please try /start again! \U0001f64f",
             reply_markup=back_to_menu_button(),
         )
         return
@@ -267,12 +357,11 @@ async def _start_topic(query, context: ContextTypes.DEFAULT_TYPE, topic_name: st
     conv_mgr.reset(user_id)
     conv = conv_mgr.get_or_create(user_id)
 
-    # Cria a mensagem de prompt: o aluno pediu para conversar sobre o topico
+    # Cria a mensagem de prompt
     user_prompt = f"I want to practice speaking about {name_en}. Can you help me?"
     conv.add_user_message(user_prompt)
     history = conv.get_formatted_history()
 
-    # Instrucao adicional para o modelo gerar uma introducao adequada
     instruction = (
         f"[INSTRUCTION] The student wants to practice the topic '{name_en}' ({name_pt}). "
         f"Introduce the topic with 2-3 simple sentences in English (A1-A2 level). "
@@ -288,32 +377,36 @@ async def _start_topic(query, context: ContextTypes.DEFAULT_TYPE, topic_name: st
         logger.error("Erro ao gerar introducao do topico: %s", e)
         reply = None
 
+    _set_screen_type(context, "conversation")
+
     if reply:
         conv.add_assistant_message(reply)
-
         text = (
-            f"🎯 **Let's talk about {name_en}!**\n\n"
+            f"\U0001f3af **Let's talk about {name_en}!**\n\n"
             f"{reply}"
         )
     else:
-        # Fallback: mensagem pre-definida
         text = (
-            f"🎯 **Let's talk about {name_en}!**\n\n"
+            f"\U0001f3af **Let's talk about {name_en}!**\n\n"
             f"Great choice! {name_en} is a fun topic to practice.\n\n"
             f"Some words you can use: {vocab_list}\n\n"
-            f"Tell me something about your favorite {name_en.lower()}! 😊"
+            f"Tell me something about your favorite {name_en.lower()}! \U0001f60a"
         )
         conv.add_assistant_message(text)
 
     await query.edit_message_text(
         text,
-        reply_markup=conversation_buttons(),
+        reply_markup=conversation_buttons(expanded=True),
         parse_mode="Markdown",
     )
 
 
+# ──────────────────────────────────────────────
+# Acoes da Conversa (More Examples, Explain, Practice)
+# ──────────────────────────────────────────────
+
 async def _more_examples(query, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Gera mais exemplos sobre o ultimo topico da conversa."""
+    """Gera mais exemplos sobre o ultimo topico da conversa. Resposta EXPANDIDA."""
     await _call_groq_for(
         query, context,
         prompt_suffix=(
@@ -321,12 +414,13 @@ async def _more_examples(query, context: ContextTypes.DEFAULT_TYPE) -> None:
             "from our last exchange. Provide 2-3 more simple example sentences "
             "using the same vocabulary or structure. Keep it A1-A2 level."
         ),
-        loading_text="📝 Generating more examples...",
+        loading_text="\U0001f4dd Generating more examples...",
+        expanded=True,
     )
 
 
 async def _explain_word(query, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Explica uma palavra da conversa."""
+    """Explica uma palavra da conversa. Resposta EXPANDIDA."""
     await _call_groq_for(
         query, context,
         prompt_suffix=(
@@ -336,12 +430,13 @@ async def _explain_word(query, context: ContextTypes.DEFAULT_TYPE) -> None:
             "the Portuguese translation, and an example sentence. "
             "Format: WORD: [word] = [translation] - [simple explanation]"
         ),
-        loading_text="📖 Looking up word explanation...",
+        loading_text="\U0001f4d6 Looking up word explanation...",
+        expanded=True,
     )
 
 
 async def _practice_this(query, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Gera um pequeno exercicio de pratica."""
+    """Gera um pequeno exercicio de pratica. Resposta EXPANDIDA."""
     await _call_groq_for(
         query, context,
         prompt_suffix=(
@@ -351,7 +446,8 @@ async def _practice_this(query, context: ContextTypes.DEFAULT_TYPE) -> None:
             "or answer a simple question. Only 1 exercise. "
             "Format: EXERCISE: [the exercise]"
         ),
-        loading_text="🎯 Creating a practice exercise...",
+        loading_text="\U0001f3af Creating a practice exercise...",
+        expanded=True,
     )
 
 
@@ -359,6 +455,7 @@ async def _call_groq_for(
     query, context: ContextTypes.DEFAULT_TYPE,
     prompt_suffix: str,
     loading_text: str,
+    expanded: bool = False,
 ) -> None:
     """
     Helper para chamar o Groq com um prompt baseado na conversa atual.
@@ -368,6 +465,7 @@ async def _call_groq_for(
         context: O context do bot.
         prompt_suffix: Texto adicional a ser adicionado ao prompt.
         loading_text: Mensagem mostrada enquanto carrega.
+        expanded: Se True, resposta vem com botoes expandidos.
     """
     user_id = query.from_user.id
     groq: GroqService = context.bot_data.get("groq")
@@ -376,7 +474,7 @@ async def _call_groq_for(
 
     if not groq or not conv_mgr:
         await query.edit_message_text(
-            "Sorry, I'm not ready yet. Please try /start again! 🙏"
+            "Sorry, I'm not ready yet. Please try /start again! \U0001f64f"
         )
         return
 
@@ -390,7 +488,7 @@ async def _call_groq_for(
 
     if not history:
         await query.edit_message_text(
-            "Let's start a conversation first! Type something and I'll help you practice! 😊",
+            "Let's start a conversation first! Type something and I'll help you practice! \U0001f60a",
             reply_markup=back_to_menu_button(),
         )
         return
@@ -401,16 +499,18 @@ async def _call_groq_for(
         logger.error("Erro ao gerar resposta do callback: %s", e)
         reply = None
 
+    _set_screen_type(context, "conversation")
+
     if reply:
         conv.add_assistant_message(reply)
         conv.add_user_message(prompt_suffix)
 
         await query.edit_message_text(
             reply,
-            reply_markup=conversation_buttons(),
+            reply_markup=conversation_buttons(expanded=expanded),
         )
     else:
         await query.edit_message_text(
-            "Sorry, I had trouble thinking of something. Let's try again! 😊",
-            reply_markup=conversation_buttons(),
+            "Sorry, I had trouble thinking of something. Let's try again! \U0001f60a",
+            reply_markup=conversation_buttons(expanded=False),
         )

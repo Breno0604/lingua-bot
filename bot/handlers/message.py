@@ -155,9 +155,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         # usa o texto original
         display_text = clean_reply if clean_reply else reply
 
+        # Marca tela como conversa e mostra botoes COMPRIMIDOS
+        context.user_data["screen_type"] = "conversation"
+
         await update.message.reply_text(
             display_text,
-            reply_markup=conversation_buttons(),
+            reply_markup=conversation_buttons(expanded=False),
         )
     else:
         await update.message.reply_text(
