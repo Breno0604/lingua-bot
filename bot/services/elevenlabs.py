@@ -34,7 +34,15 @@ VOICE_MAP: dict[str, tuple[str, str]] = {vid: (name, desc) for vid, name, desc i
 VOICE_IDS = [vid for vid, _, _ in VOICES]
 DEFAULT_VOICE_ID = VOICES[0][0]  # Rachel
 
-MODEL_ID = "eleven_multilingual_v2"
+# Modelos disponiveis para TTS (tentados em ordem)
+# Algumas vozes (especialmente customizadas) podem nao suportar
+# eleven_multilingual_v2, entao tentamos modelos alternativos.
+MODELS = [
+    "eleven_multilingual_v2",  # Multilingue, funciona com Rachel
+    "eleven_turbo_v2",         # Rapido, suporta mais vozes
+    "eleven_monolingual_v2",   # Ingles nativo, maxima compatibilidade
+]
+DEFAULT_MODEL_ID = MODELS[0]
 OUTPUT_FORMAT = "mp3_44100_128"
 MAX_CHARS = 10000
 
@@ -54,6 +62,7 @@ class ElevenLabsService:
         self.monthly_chars_used = 0
         self.max_chars = MAX_CHARS
         self.max_text_chars = 100  # truncar texto para no maximo 100 caracteres
+        self._last_model = DEFAULT_MODEL_ID  # ultimo modelo que funcionou (cache)
 
     def _get_client(self) -> ElevenLabsClient:
         """Retorna (ou cria) o cliente ElevenLabs."""
@@ -107,7 +116,7 @@ class ElevenLabsService:
         Fluxo:
           1. Trunca texto para 100 chars
           2. Verifica cache (hash do texto + voice_id)
-          3. Se ElevenLabs tem cota: usa ElevenLabs
+          3. Se ElevenLabs tem cota: usa ElevenLabs (tenta varios modelos)
           4. Se ElevenLabs excedeu: usa Deepgram TTS (fallback)
           5. Se ambos falharam: retorna None (resposta so texto)
         """
@@ -120,7 +129,7 @@ class ElevenLabsService:
         if cached is not None:
             return cached
 
-        # 3. Tenta ElevenLabs
+        # 3. Tenta ElevenLabs (com fallback de modelos)
         if self.monthly_chars_used < self.max_chars:
             audio = await self._try_elevenlabs(truncated, voice_id=voice_id)
             if audio is not None:
@@ -140,24 +149,55 @@ class ElevenLabsService:
         return None
 
     async def _try_elevenlabs(self, text: str, voice_id: str = DEFAULT_VOICE_ID) -> Optional[bytes]:
-        """Tenta gerar audio com ElevenLabs."""
-        try:
-            client = self._get_client()
-            chunks = client.text_to_speech.convert(
-                voice_id=voice_id,
-                text=text,
-                model_id=MODEL_ID,
-                output_format=OUTPUT_FORMAT,
-            )
+        """Tenta gerar audio com ElevenLabs, tentando varios modelos.
 
-            audio_bytes = b"".join(chunks)
-            if audio_bytes:
-                self.monthly_chars_used += len(text)
-                return audio_bytes
+        Algumas vozes (especialmente customizadas como Stephanie v2, Eryn,
+        Leo v2, Jerry B.) podem exigir modelos diferentes. A ordem de tentativa:
+          1. O ultimo modelo que funcionou (self._last_model)
+          2. eleven_multilingual_v2 (padrao)
+          3. eleven_turbo_v2 (rapido, boa compatibilidade)
+          4. eleven_monolingual_v2 (ingles, maxima compatibilidade)
+        """
+        client = self._get_client()
+        last_error = None
 
-            logger.warning("ElevenLabs retornou audio vazio (voice: %s)", voice_id)
-            return None
+        # Comeca pelo ultimo modelo que funcionou, depois tenta os demais
+        models_to_try = [self._last_model] + [m for m in MODELS if m != self._last_model]
 
-        except Exception as e:
-            logger.error("Erro ao gerar audio com ElevenLabs (voice: %s): %s", voice_id, e)
-            return None
+        for model_id in models_to_try:
+            try:
+                chunks = client.text_to_speech.convert(
+                    voice_id=voice_id,
+                    text=text,
+                    model_id=model_id,
+                    output_format=OUTPUT_FORMAT,
+                )
+
+                audio_bytes = b"".join(chunks)
+                if audio_bytes:
+                    logger.info(
+                        "ElevenLabs OK (voice: %s, model: %s)",
+                        voice_id, model_id,
+                    )
+                    self.monthly_chars_used += len(text)
+                    self._last_model = model_id  # cache do modelo que funcionou
+                    return audio_bytes
+
+                logger.warning(
+                    "ElevenLabs retornou audio vazio (voice: %s, model: %s)",
+                    voice_id, model_id,
+                )
+
+            except Exception as e:
+                last_error = e
+                logger.warning(
+                    "ElevenLabs falhou (voice: %s, model: %s): %s",
+                    voice_id, model_id, e,
+                )
+                continue
+
+        logger.error(
+            "ElevenLabs falhou em todos os modelos (voice: %s): %s",
+            voice_id, last_error,
+        )
+        return None

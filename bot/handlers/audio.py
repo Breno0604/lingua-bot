@@ -165,6 +165,14 @@ async def handle_audio(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         )
     else:
         # Fallback: so texto
+        # Se o usuario escolheu uma voz diferente da padrao e o audio falhou,
+        # avisa brevemente
+        if voice_id != DEFAULT_VOICE_ID:
+            display_text += (
+                "\n\n\U0001f3b6 *Audio tip:* The voice you selected isn't generating audio. "
+                "Use /voice to try a different one."
+            )
+
         await update.message.reply_text(
             display_text,
             reply_markup=conversation_buttons(expanded=False),

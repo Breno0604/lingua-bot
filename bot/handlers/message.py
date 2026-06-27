@@ -182,8 +182,18 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                 reply_markup=conversation_buttons(expanded=False, has_audio=True),
             )
         else:
+            # Se o usuario escolheu uma voz diferente da padrao e o audio falhou,
+            # avisa brevemente (mas nao atrapalha a conversa)
+            voice_id = context.user_data.get("voice_id", DEFAULT_VOICE_ID)
+            audio_note = ""
+            if voice_id != DEFAULT_VOICE_ID:
+                audio_note = (
+                    "\n\n\U0001f3b6 *Audio tip:* The voice you selected isn't generating audio. "
+                    "Use /voice to try a different one."
+                )
+
             await update.message.reply_text(
-                final_text,
+                final_text + audio_note,
                 reply_markup=conversation_buttons(expanded=False),
             )
     else:
