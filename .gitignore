@@ -35,3 +35,6 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Pip artifact files (from shell redirection of >= in requirements.txt)
+=*
