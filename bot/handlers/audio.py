@@ -157,10 +157,12 @@ async def handle_audio(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         # Monta texto final com aviso de uso se aplicavel
         final_text = display_text + usage_warning if usage_warning else display_text
 
-        # Envia como nota de voz + texto
-        await update.message.reply_voice(
-            voice=audio_bytes,
-            caption=final_text,
+        # Envia voice note sem caption (caption cria balao estreito)
+        await update.message.reply_voice(voice=audio_bytes)
+
+        # Envia o texto em mensagem separada (balao largo)
+        await update.message.reply_text(
+            final_text,
             reply_markup=conversation_buttons(expanded=False, has_audio=True),
         )
     else:

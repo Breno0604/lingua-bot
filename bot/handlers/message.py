@@ -175,10 +175,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             # Marca que esta mensagem tem audio para o botao Listen Again
             context.user_data["has_audio"] = True
 
-            # Envia como nota de voz + texto
-            await update.message.reply_voice(
-                voice=audio_bytes,
-                caption=final_text,
+            # Envia voice note sem caption (caption cria balao estreito)
+            await update.message.reply_voice(voice=audio_bytes)
+
+            # Envia o texto em mensagem separada (balao largo)
+            await update.message.reply_text(
+                final_text,
                 reply_markup=conversation_buttons(expanded=False, has_audio=True),
             )
         else:

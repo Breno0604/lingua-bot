@@ -23,10 +23,10 @@ logger = logging.getLogger(__name__)
 # Cada entrada: (voice_id, nome_curto, descricao)
 VOICES: list[tuple[str, str, str]] = [
     ("JBFqnCBsd6RMkjVDRZzb", "Rachel", "Warm and clear (default)"),
-    ("XJVfsOvSwUXluggMM5Jj", "Stephanie v2", "Confident, clear and calm"),
-    ("RaFzMbMIfqBcIurH6XF9", "Eryn", "Informative, neutral and measured"),
-    ("bbGtsRRKUfYO634UxSjz", "Leo v2", "Technical and precise"),
-    ("tCgAUbeV0tdD1S2yFoCx", "Jerry B.", "Instructional and tutorial"),
+    ("pNInz6obpgDQGcFmaJgB", "Adam", "Deep, professional, male"),
+    ("EXAVITQu4vr4xnSDxMaL", "Bella", "Soft, approachable, female"),
+    ("ErXwobaYiN019PkySvjV", "Antoni", "Warm, well-rounded, male"),
+    ("onwK4e9ZLuTAKqWW03F9", "Daniel", "Authoritative, British, male"),
 ]
 
 # Mapa voice_id -> (nome, descricao) para lookup rapido
@@ -151,8 +151,7 @@ class ElevenLabsService:
     async def _try_elevenlabs(self, text: str, voice_id: str = DEFAULT_VOICE_ID) -> Optional[bytes]:
         """Tenta gerar audio com ElevenLabs, tentando varios modelos.
 
-        Algumas vozes (especialmente customizadas como Stephanie v2, Eryn,
-        Leo v2, Jerry B.) podem exigir modelos diferentes. A ordem de tentativa:
+        Algumas vozes podem exigir modelos diferentes. A ordem de tentativa:
           1. O ultimo modelo que funcionou (self._last_model)
           2. eleven_multilingual_v2 (padrao)
           3. eleven_turbo_v2 (rapido, boa compatibilidade)

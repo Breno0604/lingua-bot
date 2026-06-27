@@ -648,10 +648,12 @@ async def _listen_again(query, context: ContextTypes.DEFAULT_TYPE) -> None:
     # O texto truncado para audio (usa o mesmo truncamento do ElevenLabs)
     truncated_text = elevenlabs._truncate_text(last_assistant_msg, max_chars=100)
 
-    # Envia como nova mensagem de voz (reply a mensagem original)
-    await query.message.reply_voice(
-        voice=audio_bytes,
-        caption=f"\U0001f50a *Listen Again:*\n\n{truncated_text}",
+    # Envia voice note sem caption (caption cria balao estreito)
+    await query.message.reply_voice(voice=audio_bytes)
+
+    # Envia o texto em mensagem separada (balao largo)
+    await query.message.reply_text(
+        f"\U0001f50a *Listen Again:*\n\n{truncated_text}",
         reply_markup=conversation_buttons(expanded=False, has_audio=True),
         parse_mode="Markdown",
     )
