@@ -1,11 +1,13 @@
 """
-LinguaBot --- ElevenLabs TTS Client
+LinguaBot --- ElevenLabs TTS Client (Fallback)
 
-Gera audio a partir de texto usando ElevenLabs API.
+Gerador de audio secundario, usado como FALLBACK quando
+o Deepgram Aura TTS falha.
+
 Inclui:
-  - Fallback automatico para Deepgram TTS quando limite e excedido
   - Cache em memoria de audios gerados (por hash do texto)
-  - Truncamento automatico para 100 caracteres
+  - Truncamento automatico (100 chars)
+  - Modelo unico: Rachel (warm and clear)
 """
 
 import logging
@@ -17,186 +19,102 @@ from bot.audio_cache import AudioCache
 
 logger = logging.getLogger(__name__)
 
-# ──────────────────────────────────────────────
-# Vozes disponiveis
-# ──────────────────────────────────────────────
-# Cada entrada: (voice_id, nome_curto, descricao)
-VOICES: list[tuple[str, str, str]] = [
-    ("JBFqnCBsd6RMkjVDRZzb", "Rachel", "Warm and clear (default)"),
-    ("pNInz6obpgDQGcFmaJgB", "Adam", "Deep, professional, male"),
-    ("EXAVITQu4vr4xnSDxMaL", "Bella", "Soft, approachable, female"),
-    ("ErXwobaYiN019PkySvjV", "Antoni", "Warm, well-rounded, male"),
-    ("onwK4e9ZLuTAKqWW03F9", "Daniel", "Authoritative, British, male"),
-]
+# Voz unica de fallback
+DEFAULT_VOICE_ID = "JBFqnCBsd6RMkjVDRZzb"  # Rachel
 
-# Mapa voice_id -> (nome, descricao) para lookup rapido
-VOICE_MAP: dict[str, tuple[str, str]] = {vid: (name, desc) for vid, name, desc in VOICES}
-VOICE_IDS = [vid for vid, _, _ in VOICES]
-DEFAULT_VOICE_ID = VOICES[0][0]  # Rachel
-
-# Modelos disponiveis para TTS (tentados em ordem)
-# Algumas vozes (especialmente customizadas) podem nao suportar
-# eleven_multilingual_v2, entao tentamos modelos alternativos.
-MODELS = [
-    "eleven_multilingual_v2",  # Multilingue, funciona com Rachel
-    "eleven_turbo_v2",         # Rapido, suporta mais vozes
-    "eleven_monolingual_v2",   # Ingles nativo, maxima compatibilidade
-]
-DEFAULT_MODEL_ID = MODELS[0]
+MODEL_ID = "eleven_multilingual_v2"
 OUTPUT_FORMAT = "mp3_44100_128"
 MAX_CHARS = 10000
 
 
 class ElevenLabsService:
-    """Cliente ElevenLabs TTS com fallback para Deepgram TTS.
+    """Cliente ElevenLabs TTS — usado como fallback do Deepgram Aura.
 
-    Gera audio a partir de texto, com truncamento automatico,
-    cache em memoria e fallback transparente.
+    Gera audio apenas com a voz Rachel (warm and clear).
     """
 
-    def __init__(self, api_key: str, deepgram_service=None, audio_cache: AudioCache = None):
+    def __init__(self, api_key: str):
         self.api_key = api_key
-        self.deepgram = deepgram_service  # fallback TTS
-        self.cache = audio_cache or AudioCache()
+        self.cache = AudioCache()
         self._client: Optional[ElevenLabsClient] = None
         self.monthly_chars_used = 0
         self.max_chars = MAX_CHARS
-        self.max_text_chars = 100  # truncar texto para no maximo 100 caracteres
-        self._last_model = DEFAULT_MODEL_ID  # ultimo modelo que funcionou (cache)
+        self.max_text_chars = 100
 
     def _get_client(self) -> ElevenLabsClient:
-        """Retorna (ou cria) o cliente ElevenLabs."""
         if self._client is None:
             self._client = ElevenLabsClient(api_key=self.api_key)
         return self._client
 
     def _truncate_text(self, text: str, max_chars: int = 100) -> str:
-        """Trunca o texto para no maximo max_chars caracteres,
-        mantendo a frase completa (corta no ultimo ponto antes do limite)."""
+        """Trunca o texto mantendo a frase completa."""
         if len(text) <= max_chars:
             return text
 
         truncated = text[:max_chars]
-
-        # Tenta cortar no ultimo ponto final
         last_period = truncated.rfind(".")
         if last_period > max_chars // 2:
             return truncated[: last_period + 1].strip()
 
-        # Se nao achou ponto, corta no ultimo espaco
         last_space = truncated.rfind(" ")
         if last_space > max_chars // 2:
             return truncated[:last_space].strip() + "."
 
         return truncated.strip() + "."
 
-    def get_usage_warning(self) -> str:
-        """Retorna aviso de uso se estiver acima de 70%."""
-        pct = (self.monthly_chars_used / self.max_chars) * 100
-        if pct >= 90:
-            remaining = self.max_chars - self.monthly_chars_used
-            return (
-                f"\n\n⚠️ *Almost out of audio!* "
-                f"Only {remaining} characters remaining this month."
-            )
-        elif pct >= 70:
-            return (
-                f"\n\n💡 *Audio usage:* "
-                f"{self.monthly_chars_used}/{self.max_chars} chars this month"
-            )
-        return ""
+    async def generate_speech(self, text: str) -> Optional[bytes]:
+        """Gera audio com ElevenLabs (voz Rachel).
 
-    async def generate_speech(self, text: str, voice_id: str = DEFAULT_VOICE_ID) -> Optional[bytes]:
-        """Gera audio a partir do texto. Retorna bytes MP3 ou None.
+        Fallback do Deepgram Aura. Usa cache e respeita limite mensal.
 
         Args:
-            text: Texto a ser convertido em audio (sera truncado para 100 chars).
-            voice_id: ID da voz ElevenLabs (padrao: Rachel).
+            text: Texto a ser convertido em audio.
 
-        Fluxo:
-          1. Trunca texto para 100 chars
-          2. Verifica cache (hash do texto + voice_id)
-          3. Se ElevenLabs tem cota: usa ElevenLabs (tenta varios modelos)
-          4. Se ElevenLabs excedeu: usa Deepgram TTS (fallback)
-          5. Se ambos falharam: retorna None (resposta so texto)
+        Returns:
+            Bytes MP3, ou None se falhou.
         """
-        # 1. Trunca texto
+        # 1. Trunca
         truncated = self._truncate_text(text, max_chars=self.max_text_chars)
 
-        # 2. Verifica cache (inclui voice_id na chave)
-        cache_key = f"{voice_id}:{truncated}"
+        # 2. Cache
+        cache_key = f"el:{truncated}"
         cached = self.cache.get(cache_key)
         if cached is not None:
             return cached
 
-        # 3. Tenta ElevenLabs (com fallback de modelos)
-        if self.monthly_chars_used < self.max_chars:
-            audio = await self._try_elevenlabs(truncated, voice_id=voice_id)
-            if audio is not None:
-                self.cache.set(cache_key, audio)
-                return audio
+        # 3. Verifica cota
+        if self.monthly_chars_used >= self.max_chars:
+            logger.warning("ElevenLabs: cota mensal excedida (%d chars)", self.max_chars)
+            return None
 
-        # 4. Fallback: Deepgram TTS (ignora voice_id, Deepgram tem vozes fixas)
-        if self.deepgram:
-            logger.info("Usando Deepgram TTS como fallback para: %s", truncated[:50])
-            audio = await self.deepgram.generate_speech(truncated)
-            if audio is not None:
-                self.cache.set(cache_key, audio)
-                return audio
+        # 4. Gera
+        audio = await self._try_elevenlabs(truncated)
+        if audio is not None:
+            self.cache.set(cache_key, audio)
+            return audio
 
-        # 5. Ambos falharam
-        logger.error("TTS falhou: ElevenLabs e Deepgram ambos indisponiveis")
         return None
 
-    async def _try_elevenlabs(self, text: str, voice_id: str = DEFAULT_VOICE_ID) -> Optional[bytes]:
-        """Tenta gerar audio com ElevenLabs, tentando varios modelos.
+    async def _try_elevenlabs(self, text: str) -> Optional[bytes]:
+        """Tenta gerar audio com ElevenLabs Rachel."""
+        try:
+            client = self._get_client()
+            chunks = client.text_to_speech.convert(
+                voice_id=DEFAULT_VOICE_ID,
+                text=text,
+                model_id=MODEL_ID,
+                output_format=OUTPUT_FORMAT,
+            )
 
-        Algumas vozes podem exigir modelos diferentes. A ordem de tentativa:
-          1. O ultimo modelo que funcionou (self._last_model)
-          2. eleven_multilingual_v2 (padrao)
-          3. eleven_turbo_v2 (rapido, boa compatibilidade)
-          4. eleven_monolingual_v2 (ingles, maxima compatibilidade)
-        """
-        client = self._get_client()
-        last_error = None
+            audio_bytes = b"".join(chunks)
+            if audio_bytes:
+                logger.info("ElevenLabs fallback OK (Rachel, chars: %d)", len(text))
+                self.monthly_chars_used += len(text)
+                return audio_bytes
 
-        # Comeca pelo ultimo modelo que funcionou, depois tenta os demais
-        models_to_try = [self._last_model] + [m for m in MODELS if m != self._last_model]
+            logger.warning("ElevenLabs retornou audio vazio")
 
-        for model_id in models_to_try:
-            try:
-                chunks = client.text_to_speech.convert(
-                    voice_id=voice_id,
-                    text=text,
-                    model_id=model_id,
-                    output_format=OUTPUT_FORMAT,
-                )
+        except Exception as e:
+            logger.warning("ElevenLabs falhou: %s", e)
 
-                audio_bytes = b"".join(chunks)
-                if audio_bytes:
-                    logger.info(
-                        "ElevenLabs OK (voice: %s, model: %s)",
-                        voice_id, model_id,
-                    )
-                    self.monthly_chars_used += len(text)
-                    self._last_model = model_id  # cache do modelo que funcionou
-                    return audio_bytes
-
-                logger.warning(
-                    "ElevenLabs retornou audio vazio (voice: %s, model: %s)",
-                    voice_id, model_id,
-                )
-
-            except Exception as e:
-                last_error = e
-                logger.warning(
-                    "ElevenLabs falhou (voice: %s, model: %s): %s",
-                    voice_id, model_id, e,
-                )
-                continue
-
-        logger.error(
-            "ElevenLabs falhou em todos os modelos (voice: %s): %s",
-            voice_id, last_error,
-        )
         return None

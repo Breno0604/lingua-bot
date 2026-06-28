@@ -5,7 +5,7 @@ Recebe mensagens de voz/audio do Telegram:
   1. Faz download do arquivo de audio
   2. Envia para Deepgram STT
   3. Texto transcrito entra no fluxo normal da conversa
-  4. Resposta e gerada com texto + audio (ElevenLabs)
+  4. Resposta e gerada com texto + audio (Deepgram Aura primario + ElevenLabs fallback)
 
 So processa audio se o usuario ja tiver conversa ativa.
 """
@@ -18,7 +18,7 @@ from telegram.ext import ContextTypes
 from bot.database import BaseDatabase
 from bot.services.conversation import ConversationManager
 from bot.services.deepgram import DeepgramService
-from bot.services.elevenlabs import DEFAULT_VOICE_ID, ElevenLabsService
+from bot.services.deepgram_tts import DEFAULT_VOICE_ID as DG_DEFAULT_VOICE_ID
 from bot.services.groq import GroqService
 from bot.services.level_manager import LevelManager
 from bot.utils.keyboards import conversation_buttons
@@ -36,7 +36,7 @@ async def handle_audio(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
       3. STT com Deepgram
       4. Mostra previa do que foi entendido
       5. Chama Groq
-      6. Gera audio com ElevenLabs
+      6. Gera audio com Deepgram Aura (+ ElevenLabs fallback)
       7. Envia texto + audio
     """
     if not update.message or not (update.message.voice or update.message.audio):
@@ -49,10 +49,11 @@ async def handle_audio(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     conversation_mgr: ConversationManager = context.bot_data.get("conversation_mgr")
     db: BaseDatabase = context.bot_data.get("db")
     level_mgr: LevelManager = context.bot_data.get("level_manager")
-    deepgram: DeepgramService = context.bot_data.get("deepgram")
-    elevenlabs: ElevenLabsService = context.bot_data.get("elevenlabs")
+    deepgram_stt: DeepgramService = context.bot_data.get("deepgram")
+    deepgram_tts = context.bot_data.get("deepgram_tts")
+    elevenlabs = context.bot_data.get("elevenlabs")
 
-    if not groq or not conversation_mgr or not db or not deepgram or not elevenlabs:
+    if not groq or not conversation_mgr or not db or not deepgram_stt:
         logger.error("Servicos de audio nao inicializados no bot_data")
         await update.message.reply_text(
             "Sorry, I'm not ready yet. Please try /start again! \U0001f64f"
@@ -82,8 +83,8 @@ async def handle_audio(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         )
         return
 
-    # 4. STT com Deepgram (idioma forcado: ingles)
-    transcribed_text = await deepgram.transcribe_audio(bytes(audio_bytes))
+    # 4. STT com Deepgram
+    transcribed_text = await deepgram_stt.transcribe_audio(bytes(audio_bytes))
 
     if not transcribed_text:
         await update.message.reply_text(
@@ -119,10 +120,8 @@ async def handle_audio(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
     conv.add_assistant_message(reply)
 
-    # Extrai vocabulario e limpa a resposta
     clean_reply, words_found = _extract_and_clean_reply(reply)
 
-    # Salva vocabulario no banco de dados
     for word_info in words_found:
         try:
             await db.save_vocab(
@@ -139,37 +138,36 @@ async def handle_audio(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
     display_text = clean_reply if clean_reply else reply
 
-    # 7. Gera audio da resposta com ElevenLabs (so para conversas)
-    voice_id = context.user_data.get("voice_id", DEFAULT_VOICE_ID)
-    audio_bytes = await elevenlabs.generate_speech(display_text, voice_id=voice_id)
-    usage_warning = elevenlabs.get_usage_warning() if audio_bytes else ""
+    # 7. Gera audio da resposta
+    # Primario: Deepgram Aura | Fallback: ElevenLabs Rachel
+    audio_bytes = None
+
+    if deepgram_tts:
+        voice_id = context.user_data.get("voice_id", DG_DEFAULT_VOICE_ID)
+        audio_bytes = await deepgram_tts.generate_speech(display_text, voice_id=voice_id)
+
+    # Fallback: ElevenLabs
+    if not audio_bytes and elevenlabs:
+        logger.info("Deepgram Aura falhou, usando ElevenLabs fallback (audio msg)")
+        audio_bytes = await elevenlabs.generate_speech(display_text)
 
     if audio_bytes:
-        # Remove a mensagem de previa antes de enviar resposta final
         try:
             await preview.delete()
         except Exception:
             pass
 
-        # Marca que esta mensagem tem audio
         context.user_data["has_audio"] = True
 
-        # Monta texto final com aviso de uso se aplicavel
-        final_text = display_text + usage_warning if usage_warning else display_text
-
-        # Envia voice note sem caption (caption cria balao estreito)
         await update.message.reply_voice(voice=audio_bytes)
-
-        # Envia o texto em mensagem separada (balao largo)
         await update.message.reply_text(
-            final_text,
+            display_text,
             reply_markup=conversation_buttons(expanded=False, has_audio=True),
         )
     else:
         # Fallback: so texto
-        # Se o usuario escolheu uma voz diferente da padrao e o audio falhou,
-        # avisa brevemente
-        if voice_id != DEFAULT_VOICE_ID:
+        voice_id = context.user_data.get("voice_id", DG_DEFAULT_VOICE_ID)
+        if voice_id != DG_DEFAULT_VOICE_ID:
             display_text += (
                 "\n\n\U0001f3b6 *Audio tip:* The voice you selected isn't generating audio. "
                 "Use /voice to try a different one."

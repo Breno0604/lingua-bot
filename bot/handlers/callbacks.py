@@ -17,7 +17,9 @@ from telegram.ext import ContextTypes
 
 from bot.database import BaseDatabase
 from bot.services.conversation import ConversationManager
-from bot.services.elevenlabs import DEFAULT_VOICE_ID, ElevenLabsService
+from bot.services.deepgram_tts import DEFAULT_VOICE_ID as DG_DEFAULT_VOICE_ID
+from bot.services.deepgram_tts import VOICE_MAP as DG_VOICE_MAP
+from bot.services.elevenlabs import ElevenLabsService
 from bot.services.groq import GroqService
 from bot.services.level_manager import LevelManager
 from bot.utils.formatting import TOPICS, format_topic_suggestion, get_random_topic
@@ -66,7 +68,6 @@ async def _expand_options(query, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Expande os botoes: substitui '+ More Options' pelos botoes reais + Hide."""
     original_text = query.message.text or ""
 
-    # Feedback visual rapido: mostra loading antes de expandir
     try:
         await query.edit_message_text(
             original_text + "\n\n✨ Loading...",
@@ -144,7 +145,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     elif data == "listen_again":
         await _listen_again(query, context)
 
-    # Selecao de voz
+    # Selecao de voz (Deepgram Aura)
     elif data.startswith("set_voice_"):
         voice_id = data[len("set_voice_"):]
         await _set_voice(query, context, voice_id)
@@ -167,7 +168,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 # ──────────────────────────────────────────────
 
 async def _set_level(query, context: ContextTypes.DEFAULT_TYPE, level: str) -> None:
-    """Define o nivel do usuario e confirma. SEM compressao — nivel e sempre visivel."""
+    """Define o nivel do usuario e confirma."""
     user_id = query.from_user.id
     level_mgr: LevelManager = context.bot_data.get("level_manager")
 
@@ -196,6 +197,43 @@ async def _set_level(query, context: ContextTypes.DEFAULT_TYPE, level: str) -> N
     await query.edit_message_text(
         text,
         reply_markup=main_menu(),
+        parse_mode="Markdown",
+    )
+
+
+async def _set_voice(query, context: ContextTypes.DEFAULT_TYPE, voice_id: str) -> None:
+    """Define a voz do usuario (Deepgram Aura) e confirma."""
+    deepgram_tts = context.bot_data.get("deepgram_tts")
+    if not deepgram_tts:
+        await query.edit_message_text(
+            "Sorry, audio services aren't configured. \U0001f3b6",
+            reply_markup=back_to_menu_button(),
+        )
+        return
+
+    # Valida o voice_id contra as vozes Deepgram
+    if voice_id not in DG_VOICE_MAP:
+        await query.edit_message_text(
+            "Invalid voice selection.",
+            reply_markup=back_to_menu_button(),
+        )
+        return
+
+    name, desc = DG_VOICE_MAP[voice_id]
+
+    # Salva a preferencia do usuario
+    context.user_data["voice_id"] = voice_id
+
+    text = (
+        f"\u2705 **Voice updated to {name}!**\n\n"
+        f"{desc}\n\n"
+        "I'll use this voice for my audio responses. "
+        "You can change it anytime with /voice"
+    )
+
+    await query.edit_message_text(
+        text,
+        reply_markup=back_to_menu_button(),
         parse_mode="Markdown",
     )
 
@@ -264,7 +302,7 @@ async def _show_how_it_works(query, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def _start_conversation(query, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Inicia uma conversa com sugestao de topico. SEM compressao — botoes sempre visiveis."""
+    """Inicia uma conversa com sugestao de topico."""
     topic = get_random_topic()
     suggestion = format_topic_suggestion(topic)
 
@@ -281,12 +319,7 @@ async def _show_vocab(query, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def _show_vocab_page(query, context: ContextTypes.DEFAULT_TYPE, page: int) -> None:
-    """Exibe uma pagina especifica do vocabulario, filtrada por nivel.
-
-    Quando o usuario esta navegando entre paginas (vocab_page_n),
-    o estado permanece EXPANDIDO para facilitar a navegacao.
-    Quando vem de outra tela, comeca COMPRIMIDO.
-    """
+    """Exibe uma pagina especifica do vocabulario, filtrada por nivel."""
     user_id = query.from_user.id
     db: BaseDatabase = context.bot_data.get("db")
     level_mgr: LevelManager = context.bot_data.get("level_manager")
@@ -298,7 +331,6 @@ async def _show_vocab_page(query, context: ContextTypes.DEFAULT_TYPE, page: int)
         )
         return
 
-    # Filtra pelo nivel atual do usuario
     user_level = level_mgr.get_level(user_id) if level_mgr else None
     page_size = 10
 
@@ -318,8 +350,6 @@ async def _show_vocab_page(query, context: ContextTypes.DEFAULT_TYPE, page: int)
     text = format_vocab_list(entries, total, page=page, page_size=page_size)
     total_pages = max(1, (total + page_size - 1) // page_size)
 
-    # Se veio de callback vocab_page_n (navegacao), mantem EXPANDIDO
-    # Se veio de show_vocab (entrando na tela), comeca COMPRIMIDO
     came_from_nav = query.data and query.data.startswith("vocab_page_")
 
     _set_screen_type(context, "vocab", page=page, total_pages=total_pages)
@@ -351,10 +381,7 @@ async def _show_topics(query, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def _start_topic(query, context: ContextTypes.DEFAULT_TYPE, topic_name: str) -> None:
-    """
-    Inicia uma conversa sobre um topico especifico.
-    Resposta vem EXPANDIDA para que o usuario ja veja as opcoes.
-    """
+    """Inicia uma conversa sobre um topico especifico."""
     user_id = query.from_user.id
     groq: GroqService = context.bot_data.get("groq")
     conv_mgr: ConversationManager = context.bot_data.get("conversation_mgr")
@@ -367,7 +394,6 @@ async def _start_topic(query, context: ContextTypes.DEFAULT_TYPE, topic_name: st
         )
         return
 
-    # Encontra o topico na lista
     topic_info = None
     for t in TOPICS:
         if t[0] == topic_name:
@@ -380,11 +406,9 @@ async def _start_topic(query, context: ContextTypes.DEFAULT_TYPE, topic_name: st
     name_en, name_pt, vocab = topic_info
     vocab_list = ", ".join(vocab)
 
-    # Reseta a conversa e inicia com o topico
     conv_mgr.reset(user_id)
     conv = conv_mgr.get_or_create(user_id)
 
-    # Cria a mensagem de prompt
     user_prompt = f"I want to practice speaking about {name_en}. Can you help me?"
     conv.add_user_message(user_prompt)
     history = conv.get_formatted_history()
@@ -484,16 +508,7 @@ async def _call_groq_for(
     loading_text: str,
     expanded: bool = False,
 ) -> None:
-    """
-    Helper para chamar o Groq com um prompt baseado na conversa atual.
-
-    Args:
-        query: O callback query do Telegram.
-        context: O context do bot.
-        prompt_suffix: Texto adicional a ser adicionado ao prompt.
-        loading_text: Mensagem mostrada enquanto carrega.
-        expanded: Se True, resposta vem com botoes expandidos.
-    """
+    """Helper para chamar o Groq com um prompt baseado na conversa atual."""
     user_id = query.from_user.id
     groq: GroqService = context.bot_data.get("groq")
     conv_mgr: ConversationManager = context.bot_data.get("conversation_mgr")
@@ -505,7 +520,6 @@ async def _call_groq_for(
         )
         return
 
-    # Mostra mensagem de carregamento
     await query.edit_message_text(loading_text)
 
     user_level = level_mgr.get_level(user_id) if level_mgr else "A1"
@@ -544,60 +558,20 @@ async def _call_groq_for(
 
 
 # ──────────────────────────────────────────────
-# Audio: Listen Again
+# Audio: Listen Again (com fallback Deepgram -> ElevenLabs)
 # ──────────────────────────────────────────────
-
-
-async def _set_voice(query, context: ContextTypes.DEFAULT_TYPE, voice_id: str) -> None:
-    """Define a voz do usuario e confirma."""
-    from bot.services.elevenlabs import VOICE_MAP
-
-    elevenlabs = context.bot_data.get("elevenlabs")
-    if not elevenlabs:
-        await query.edit_message_text(
-            "Sorry, audio services aren't configured. \U0001f3b6",
-            reply_markup=back_to_menu_button(),
-        )
-        return
-
-    # Valida o voice_id
-    if voice_id not in VOICE_MAP:
-        await query.edit_message_text(
-            "Invalid voice selection.",
-            reply_markup=back_to_menu_button(),
-        )
-        return
-
-    name, desc = VOICE_MAP[voice_id]
-
-    # Salva a preferencia do usuario
-    context.user_data["voice_id"] = voice_id
-
-    text = (
-        f"\u2705 **Voice updated to {name}!**\n\n"
-        f"{desc}\n\n"
-        "I'll use this voice for my audio responses. "
-        "You can change it anytime with /voice"
-    )
-
-    await query.edit_message_text(
-        text,
-        reply_markup=back_to_menu_button(),
-        parse_mode="Markdown",
-    )
-
 
 async def _listen_again(query, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Regenera o audio da ultima resposta do assistente.
 
-    Pega o texto da ultima resposta na conversa, gera audio
-    via ElevenLabs e envia como nova mensagem de voz.
+    Tenta Deepgram Aura primeiro, fallback para ElevenLabs Rachel.
     """
     user_id = query.from_user.id
     conv_mgr: ConversationManager = context.bot_data.get("conversation_mgr")
-    elevenlabs: ElevenLabsService = context.bot_data.get("elevenlabs")
+    deepgram_tts = context.bot_data.get("deepgram_tts")
+    elevenlabs = context.bot_data.get("elevenlabs")
 
-    if not conv_mgr or not elevenlabs:
+    if not conv_mgr or not deepgram_tts:
         await query.edit_message_text(
             "Sorry, I'm not ready yet. Please try /start again! \U0001f64f",
             reply_markup=back_to_menu_button(),
@@ -631,11 +605,16 @@ async def _listen_again(query, context: ContextTypes.DEFAULT_TYPE) -> None:
     # Mostra loading
     await query.edit_message_text("\U0001f50a Generating audio...")
 
-    # Obtem a voz preferida do usuario (padrao: Rachel)
-    voice_id = context.user_data.get("voice_id", DEFAULT_VOICE_ID)
+    # Obtem a voz preferida do usuario (padrao: Thalia / Deepgram)
+    voice_id = context.user_data.get("voice_id", DG_DEFAULT_VOICE_ID)
 
-    # Gera audio com a voz do usuario
-    audio_bytes = await elevenlabs.generate_speech(last_assistant_msg, voice_id=voice_id)
+    # 1. Tenta Deepgram Aura (primario)
+    audio_bytes = await deepgram_tts.generate_speech(last_assistant_msg, voice_id=voice_id)
+
+    # 2. Fallback: ElevenLabs Rachel
+    if not audio_bytes and elevenlabs:
+        logger.info("Deepgram Aura falhou, tentando ElevenLabs fallback para Listen Again")
+        audio_bytes = await elevenlabs.generate_speech(last_assistant_msg)
 
     if not audio_bytes:
         await query.edit_message_text(
@@ -645,13 +624,13 @@ async def _listen_again(query, context: ContextTypes.DEFAULT_TYPE) -> None:
         )
         return
 
-    # O texto truncado para audio (usa o mesmo truncamento do ElevenLabs)
-    truncated_text = elevenlabs._truncate_text(last_assistant_msg, max_chars=100)
+    # Trunca o texto para exibicao
+    truncated_text = deepgram_tts._truncate_text(last_assistant_msg, max_chars=100)
 
-    # Envia voice note sem caption (caption cria balao estreito)
+    # Envia voice note sem caption
     await query.message.reply_voice(voice=audio_bytes)
 
-    # Envia o texto em mensagem separada (balao largo)
+    # Envia o texto em mensagem separada
     await query.message.reply_text(
         f"\U0001f50a *Listen Again:*\n\n{truncated_text}",
         reply_markup=conversation_buttons(expanded=False, has_audio=True),

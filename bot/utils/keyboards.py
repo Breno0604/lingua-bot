@@ -5,8 +5,8 @@ Menus e botoes inline usados nos handlers.
 Centraliza a definicao dos teclados para facilitar manutencao.
 
 Todos os teclados agora suportam compressao via collapse_keyboard:
-- expanded=False (padrao): mostra apenas "➕ More Options"
-- expanded=True: mostra todos os botoes + "◀ Hide Options"
+- expanded=False (padrao): mostra apenas "\u2795 More Options"
+- expanded=True: mostra todos os botoes + "\u25c0 Hide Options"
 """
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
@@ -25,16 +25,7 @@ def collapse_keyboard(
     expanded_keyboard: list[list[InlineKeyboardButton]],
     expanded: bool = False,
 ) -> InlineKeyboardMarkup:
-    """Encapsula um teclado inline com comportamento de expandir/recolher.
-
-    Args:
-        expanded_keyboard: O teclado completo (lista de linhas de botoes).
-        expanded: Se True, mostra todos os botoes + Hide Options.
-                  Se False (padrao), mostra apenas "+ More Options".
-
-    Returns:
-        InlineKeyboardMarkup com o estado apropriado.
-    """
+    """Encapsula um teclado inline com comportamento de expandir/recolher."""
     if expanded:
         keyboard = list(expanded_keyboard)
         keyboard.append([HIDE_BUTTON])
@@ -59,12 +50,7 @@ def main_menu(expanded: bool = False) -> InlineKeyboardMarkup:
 
 
 def conversation_buttons(expanded: bool = False, has_audio: bool = False) -> InlineKeyboardMarkup:
-    """Botoes exibidos apos cada resposta do bot.
-
-    Args:
-        expanded: Se True, mostra todos os botoes + Hide.
-        has_audio: Se True e expanded=True, inclui o botao Listen Again.
-    """
+    """Botoes exibidos apos cada resposta do bot."""
     keyboard = [
         [
             InlineKeyboardButton("\U0001f4dd More Examples", callback_data="more_examples"),
@@ -144,8 +130,8 @@ def level_selection_keyboard(current_level: str = "A1") -> InlineKeyboardMarkup:
 
 
 def voice_selection_keyboard(current_voice_id: str) -> InlineKeyboardMarkup:
-    """Botoes para escolha de voz. SEM compressao — sempre visivel."""
-    from bot.services.elevenlabs import VOICES
+    """Botoes para escolha de voz (Deepgram Aura). SEM compressao — sempre visivel."""
+    from bot.services.deepgram_tts import VOICES
 
     keyboard = []
     for vid, name, desc in VOICES:

@@ -31,12 +31,12 @@ from bot.handlers.voice_command import voice_command
 from bot.handlers.start import start
 from bot.services.conversation import ConversationManager
 from bot.services.deepgram import DeepgramService
+from bot.services.deepgram_tts import DeepgramTTSService
 from bot.services.elevenlabs import ElevenLabsService
 from bot.services.groq import GroqService
 from bot.services.level_manager import LevelManager
 from bot.utils.rate_limiter import RateLimiter
 
-# Configuracao de logging basico
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     level=logging.INFO,
@@ -63,20 +63,40 @@ def build_application() -> Application:
     application.bot_data["rate_limiter"] = rate_limiter
     application.bot_data["level_manager"] = level_mgr
 
-    # Servicos de audio (so se as chaves estiverem configuradas)
-    if config.deepgram_api_key and config.elevenlabs_api_key:
-        deepgram_service = DeepgramService(config.deepgram_api_key)
-        elevenlabs_service = ElevenLabsService(
-            api_key=config.elevenlabs_api_key,
-            deepgram_service=deepgram_service,
+    # ── Servicos de Audio ──
+    # Hierarchy: Deepgram Aura (primario) -> ElevenLabs (fallback)
+    #
+    # Fluxo dos handlers:
+    #   1. message.py / audio.py / callbacks.py
+    #      -> tenta deepgram_tts.generate_speech(text, voice_id)
+    #   2. Se falhou -> tenta elevenlabs.generate_speech(text) [Rachel]
+    #   3. Se ambos falharam -> resposta sem audio
+
+    if config.deepgram_api_key:
+        # Deepgram Aura TTS (primario - 4 vozes)
+        deepgram_tts_service = DeepgramTTSService(api_key=config.deepgram_api_key)
+        application.bot_data["deepgram_tts"] = deepgram_tts_service
+
+        # Deepgram STT (transcricao de audio do usuario)
+        deepgram_stt_service = DeepgramService(config.deepgram_api_key)
+        application.bot_data["deepgram"] = deepgram_stt_service
+
+        logger.info("Deepgram Aura TTS inicializado (primario)")
+
+        if config.elevenlabs_api_key:
+            # ElevenLabs TTS (fallback - apenas Rachel)
+            elevenlabs_service = ElevenLabsService(api_key=config.elevenlabs_api_key)
+            application.bot_data["elevenlabs"] = elevenlabs_service
+            logger.info("ElevenLabs TTS inicializado (fallback)")
+
+        # Handler de mensagens de voz (depende de Deepgram STT)
+        application.add_handler(
+            MessageHandler(filters.VOICE | filters.AUDIO, handle_audio)
         )
-        application.bot_data["deepgram"] = deepgram_service
-        application.bot_data["elevenlabs"] = elevenlabs_service
-        logger.info("Servicos de audio inicializados (Deepgram + ElevenLabs)")
     else:
         logger.info(
-            "Chaves de audio nao configuradas — pulando servicos de audio. "
-            "Defina DEEPGRAM_API_KEY e ELEVENLABS_API_KEY no .env"
+            "DEEPGRAM_API_KEY nao configurada — pulando servicos de audio. "
+            "Defina DEEPGRAM_API_KEY no .env"
         )
 
     # --- Handlers de Comandos ---
@@ -90,12 +110,6 @@ def build_application() -> Application:
 
     # --- Handler de Callbacks (botoes inline) ---
     application.add_handler(CallbackQueryHandler(handle_callback))
-
-    # --- Handler de Mensagens de Audio ---
-    if config.deepgram_api_key and config.elevenlabs_api_key:
-        application.add_handler(
-            MessageHandler(filters.VOICE | filters.AUDIO, handle_audio)
-        )
 
     # --- Handler de Mensagens de Texto ---
     application.add_handler(
