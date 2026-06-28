@@ -493,6 +493,61 @@ class TestTTSFlow:
         call_kwargs = deepgram_tts.generate_speech.call_args
         assert call_kwargs.kwargs.get("voice_id") == "asteria"
 
+    @pytest.mark.asyncio
+    async def test_speed_passed_to_deepgram_tts(self, active_conversation):
+        """Velocidade personalizada do usuario e passada para o Deepgram TTS."""
+        update, context = active_conversation
+
+        # Define velocidade personalizada
+        context.user_data["tts_speed"] = 0.85
+
+        await handle_audio(update, context)
+
+        deepgram_tts = context.bot_data["deepgram_tts"]
+        call_kwargs = deepgram_tts.generate_speech.call_args.kwargs
+        assert call_kwargs.get("speed") == 0.85, (
+            f"speed=0.85 esperado, recebeu {call_kwargs.get('speed')}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_speed_defaults_to_level_based(self, audio_update, configured_audio_context):
+        """Quando speed nao esta em user_data, usa o padrao baseado no nivel (A1=0.85)."""
+        conv = configured_audio_context.bot_data["conversation_mgr"].get_or_create(12345)
+        conv.add_user_message("Hello")
+        conv.add_assistant_message("Hi there!")
+
+        # level_manager retorna A1
+        configured_audio_context.user_data = {}  # sem tts_speed
+
+        await handle_audio(audio_update, configured_audio_context)
+
+        deepgram_tts = configured_audio_context.bot_data["deepgram_tts"]
+        call_kwargs = deepgram_tts.generate_speech.call_args.kwargs
+        assert call_kwargs.get("speed") == 0.85, (
+            f"A1 deve usar speed=0.85, recebeu {call_kwargs.get('speed')}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_speed_passed_to_elevenlabs_fallback(self, audio_update, configured_audio_context):
+        """Velocidade tambem e passada para ElevenLabs quando Deepgram falha."""
+        conv = configured_audio_context.bot_data["conversation_mgr"].get_or_create(12345)
+        conv.add_user_message("Hello")
+        conv.add_assistant_message("Hi there!")
+
+        # Deepgram falha
+        configured_audio_context.bot_data["deepgram_tts"].generate_speech = AsyncMock(
+            return_value=None
+        )
+        configured_audio_context.user_data["tts_speed"] = 0.75
+
+        await handle_audio(audio_update, configured_audio_context)
+
+        elevenlabs = configured_audio_context.bot_data["elevenlabs"]
+        call_kwargs = elevenlabs.generate_speech.call_args.kwargs
+        assert call_kwargs.get("speed") == 0.75, (
+            f"ElevenLabs fallback deve receber speed=0.75, recebeu {call_kwargs.get('speed')}"
+        )
+
 
 # ──────────────────────────────────────────────
 # Salvamento de Vocabulario

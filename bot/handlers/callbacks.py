@@ -23,6 +23,7 @@ from bot.services.groq import GroqService
 from bot.services.level_manager import LevelManager
 from bot.utils.formatting import TOPICS, format_topic_suggestion, get_random_topic
 from bot.utils.keyboards import (
+    DEFAULT_SPEED_BY_LEVEL,
     back_to_menu_button,
     conversation_buttons,
     level_selection_keyboard,
@@ -144,6 +145,12 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         voice_id = data[len("set_voice_"):]
         await _set_voice(query, context, voice_id)
 
+    # Selecao de velocidade do TTS
+    elif data.startswith("set_speed_"):
+        speed_str = data[len("set_speed_"):]
+        speed = float(speed_str)
+        await _set_speed(query, context, speed)
+
     # Gerenciamento de nivel
     elif data.startswith("set_level_"):
         level = data[len("set_level_"):]
@@ -181,6 +188,10 @@ async def _set_level(query, context: ContextTypes.DEFAULT_TYPE, level: str) -> N
 
     label = level_mgr.get_label(level)
     confirmation = level_mgr.get_confirmation(level)
+
+    # Reseta velocidade ao padrao do novo nivel
+    new_speed = DEFAULT_SPEED_BY_LEVEL.get(level, 1.0)
+    context.user_data["tts_speed"] = new_speed
 
     text = (
         f"\u2705 **Level updated to {label}!**\n\n"
@@ -222,6 +233,34 @@ async def _set_voice(query, context: ContextTypes.DEFAULT_TYPE, voice_id: str) -
         f"\u2705 **Voice updated to {name}!**\n\n"
         f"{desc}\n\n"
         "I'll use this voice for my audio responses. "
+        "You can change it anytime with /voice"
+    )
+
+    await query.edit_message_text(
+        text,
+        reply_markup=back_to_menu_button(),
+        parse_mode="Markdown",
+    )
+
+
+async def _set_speed(query, context: ContextTypes.DEFAULT_TYPE, speed: float) -> None:
+    """Define a velocidade do TTS para o usuario e confirma."""
+    # Salva preferencia
+    context.user_data["tts_speed"] = speed
+
+    # Indicador visual da velocidade
+    speed_labels = {
+        0.75: "\U0001f422 Very slow",
+        0.85: "Slow",
+        1.0: "Normal",
+        1.15: "Fast",
+        1.25: "\U0001f407 Very fast",
+    }
+
+    text = (
+        f"\u2705 **Speed set to {speed}x!**\n\n"
+        f"{speed_labels.get(speed, '')}\n\n"
+        "I'll use this speed for my audio responses. "
         "You can change it anytime with /voice"
     )
 

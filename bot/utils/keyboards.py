@@ -11,6 +11,16 @@ Todos os teclados agora suportam compressao via collapse_keyboard:
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
+# Opcoes de velocidade de audio disponiveis
+SPEED_OPTIONS = [0.75, 0.85, 1.0, 1.15, 1.25]
+
+# Velocidade padrao por nivel de proficiencia
+DEFAULT_SPEED_BY_LEVEL = {
+    "A1": 0.85,
+    "A2": 0.9,
+    "B1": 1.0,
+}
+
 # Botoes de controle de compressao
 MORE_BUTTON = InlineKeyboardButton("\u2795 More Options", callback_data="show_more_options")
 HIDE_BUTTON = InlineKeyboardButton("\u25c0 Hide Options", callback_data="hide_options")
@@ -122,14 +132,34 @@ def level_selection_keyboard(current_level: str = "A1") -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(keyboard)
 
 
-def voice_selection_keyboard(current_voice_id: str) -> InlineKeyboardMarkup:
-    """Botoes para escolha de voz (Deepgram Aura). SEM compressao — sempre visivel."""
+def voice_selection_keyboard(current_voice_id: str, current_speed: float = 1.0) -> InlineKeyboardMarkup:
+    """Botoes para escolha de voz (Deepgram Aura) + velocidade.
+
+    Inclui 5 opcoes de velocidade (0.75 a 1.25).
+    SEM compressao — sempre visivel.
+    """
     from bot.services.deepgram_tts import VOICES
 
     keyboard = []
+    # Secao de vozes
     for vid, name, desc in VOICES:
         label = f"\U0001f50a {name}" if vid == current_voice_id else f"{name}"
         keyboard.append([InlineKeyboardButton(label, callback_data=f"set_voice_{vid}")])
+
+    # Secao de velocidade
+    speed_row = []
+    for speed_val in SPEED_OPTIONS:
+        emoji = ""
+        if speed_val == 0.75:
+            emoji = "\U0001f422 "  # turtle
+        elif speed_val == 1.25:
+            emoji = "\U0001f407 "   # rabbit
+        marker = " \u25cf" if speed_val == current_speed else ""
+        label = f"{emoji}{speed_val}x{marker}"
+        speed_row.append(InlineKeyboardButton(label, callback_data=f"set_speed_{speed_val}"))
+    keyboard.append(speed_row)
+
+    keyboard.append([InlineKeyboardButton("\U0001f519 Back to Menu", callback_data="back_to_menu")])
     return InlineKeyboardMarkup(keyboard)
 
 

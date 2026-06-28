@@ -86,13 +86,15 @@ class ElevenLabsService:
 
         return truncated.strip() + "."
 
-    async def generate_speech(self, text: str) -> Optional[bytes]:
+    async def generate_speech(self, text: str, speed: float = 1.0) -> Optional[bytes]:
         """Gera audio com ElevenLabs (voz Rachel).
 
         Fallback do Deepgram Aura. Usa cache e respeita limite mensal.
 
         Args:
             text: Texto a ser convertido em audio.
+            speed: Multiplicador de velocidade (0.75 a 1.25).
+                   Se a API nao suportar, o parametro e ignorado.
 
         Returns:
             Bytes MP3, ou None se falhou.
@@ -106,7 +108,7 @@ class ElevenLabsService:
         truncated = self._truncate_text(cleaned, max_chars=self.max_text_chars)
 
         # 2. Cache
-        cache_key = f"el:{truncated}"
+        cache_key = f"el:{speed}:{truncated}"
         cached = self.cache.get(cache_key)
         if cached is not None:
             return cached
@@ -117,27 +119,35 @@ class ElevenLabsService:
             return None
 
         # 4. Gera
-        audio = await self._try_elevenlabs(truncated)
+        audio = await self._try_elevenlabs(truncated, speed=speed)
         if audio is not None:
             self.cache.set(cache_key, audio)
             return audio
 
         return None
 
-    async def _try_elevenlabs(self, text: str) -> Optional[bytes]:
-        """Tenta gerar audio com ElevenLabs Rachel."""
+    async def _try_elevenlabs(self, text: str, speed: float = 1.0) -> Optional[bytes]:
+        """Tenta gerar audio com ElevenLabs Rachel.
+
+        Suporta parametro speed se o modelo aceitar.
+        """
         try:
             client = self._get_client()
-            chunks = client.text_to_speech.convert(
-                voice_id=DEFAULT_VOICE_ID,
-                text=text,
-                model_id=MODEL_ID,
-                output_format=OUTPUT_FORMAT,
-            )
+            kwargs = {
+                "voice_id": DEFAULT_VOICE_ID,
+                "text": text,
+                "model_id": MODEL_ID,
+                "output_format": OUTPUT_FORMAT,
+            }
+            # Speed e um parametro opcional no modelo ElevenLabs
+            if speed != 1.0:
+                kwargs["speed"] = speed
+
+            chunks = client.text_to_speech.convert(**kwargs)
 
             audio_bytes = b"".join(chunks)
             if audio_bytes:
-                logger.info("ElevenLabs fallback OK (Rachel, chars: %d)", len(text))
+                logger.info("ElevenLabs fallback OK (Rachel, chars: %d, speed: %s)", len(text), speed)
                 self.monthly_chars_used += len(text)
                 return audio_bytes
 

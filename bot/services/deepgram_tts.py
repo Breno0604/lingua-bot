@@ -99,12 +99,14 @@ class DeepgramTTSService:
 
         return truncated.strip() + "."
 
-    async def generate_speech(self, text: str, voice_id: str = DEFAULT_VOICE_ID) -> Optional[bytes]:
+    async def generate_speech(self, text: str, voice_id: str = DEFAULT_VOICE_ID, speed: float = 1.0) -> Optional[bytes]:
         """Gera audio a partir do texto usando Deepgram Aura.
 
         Args:
             text: Texto a ser convertido em audio.
             voice_id: ID da voz (ex: aura-2-thalia-en).
+            speed: Multiplicador de velocidade (0.75 a 1.25).
+                   Se a API nao suportar, o parametro e ignorado.
 
         Returns:
             Bytes do audio (MP3), ou None se falhou.
@@ -118,13 +120,13 @@ class DeepgramTTSService:
         truncated = self._truncate_text(cleaned, max_chars=self.max_text_chars)
 
         # 3. Verifica cache
-        cache_key = f"dg:{voice_id}:{truncated}"
+        cache_key = f"dg:{voice_id}:{speed}:{truncated}"
         cached = self.cache.get(cache_key)
         if cached is not None:
             return cached
 
         # 3. Chama Deepgram Aura
-        audio = await self._try_deepgram(truncated, voice_id=voice_id)
+        audio = await self._try_deepgram(truncated, voice_id=voice_id, speed=speed)
         if audio is not None:
             self.cache.set(cache_key, audio)
             return audio
@@ -132,28 +134,40 @@ class DeepgramTTSService:
         logger.error("Deepgram Aura TTS falhou para voz: %s", voice_id)
         return None
 
-    async def _try_deepgram(self, text: str, voice_id: str = DEFAULT_VOICE_ID) -> Optional[bytes]:
-        """Tenta gerar audio com Deepgram Aura."""
+    async def _try_deepgram(self, text: str, voice_id: str = DEFAULT_VOICE_ID, speed: float = 1.0) -> Optional[bytes]:
+        """Tenta gerar audio com Deepgram Aura.
+
+        Se o parametro speed falhar (API nao suporta), tenta sem speed.
+        """
         try:
             client = self._get_client()
             # Nota: encoding="mp3" NAO aceita parametro container
-            chunks = client.speak.v1.audio.generate(
-                text=text,
-                model=voice_id,
-                encoding="mp3",
-            )
+            kwargs = {
+                "text": text,
+                "model": voice_id,
+                "encoding": "mp3",
+            }
+            # So inclui speed se diferente de 1.0 (para compatibilidade com API)
+            if speed != 1.0:
+                kwargs["speed"] = speed
+
+            chunks = client.speak.v1.audio.generate(**kwargs)
 
             audio_bytes = b"".join(chunks)
             if audio_bytes:
                 logger.info(
-                    "Deepgram Aura OK (voice: %s, chars: %d)",
-                    voice_id, len(text),
+                    "Deepgram Aura OK (voice: %s, chars: %d, speed: %s)",
+                    voice_id, len(text), speed,
                 )
                 return audio_bytes
 
-            logger.warning("Deepgram Aura retornou audio vazio (voice: %s)", voice_id)
+            logger.warning("Deepgram Aura retornou audio vazio (voice: %s, speed: %s)", voice_id, speed)
 
         except Exception as e:
-            logger.warning("Deepgram Aura falhou (voice: %s): %s", voice_id, e)
+            logger.warning("Deepgram Aura falhou (voice: %s, speed: %s): %s", voice_id, speed, e)
+            # Se falhou com speed != 1.0, tentar sem speed (fallback)
+            if speed != 1.0:
+                logger.info("Tentando Deepgram Aura sem speed parameter...")
+                return await self._try_deepgram(text, voice_id=voice_id, speed=1.0)
 
         return None

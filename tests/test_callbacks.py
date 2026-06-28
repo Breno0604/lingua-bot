@@ -10,6 +10,60 @@ import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from bot.handlers.callbacks import handle_callback
+from bot.utils.keyboards import SPEED_OPTIONS, DEFAULT_SPEED_BY_LEVEL
+
+
+class TestSpeedCallbacks:
+    """Testes para callbacks de velocidade do TTS."""
+
+    @pytest.mark.asyncio
+    async def test_set_speed_0_85(self, mock_update, configured_context):
+        """set_speed_0.85 salva 0.85 em user_data e mostra confirmacao."""
+        mock_update.callback_query.data = "set_speed_0.85"
+        configured_context.user_data = {}
+
+        await handle_callback(mock_update, configured_context)
+
+        assert configured_context.user_data.get("tts_speed") == 0.85
+        mock_update.callback_query.answer.assert_called_once()
+        mock_update.callback_query.edit_message_text.assert_called_once()
+        text = mock_update.callback_query.edit_message_text.call_args[0][0]
+        assert "Speed set to 0.85x" in text
+
+    @pytest.mark.asyncio
+    async def test_set_speed_1_25(self, mock_update, configured_context):
+        """set_speed_1.25 salva 1.25 em user_data."""
+        mock_update.callback_query.data = "set_speed_1.25"
+        configured_context.user_data = {}
+
+        await handle_callback(mock_update, configured_context)
+
+        assert configured_context.user_data.get("tts_speed") == 1.25
+        text = mock_update.callback_query.edit_message_text.call_args[0][0]
+        assert "Speed set to 1.25x" in text
+
+    @pytest.mark.asyncio
+    async def test_set_speed_1_0_default(self, mock_update, configured_context):
+        """set_speed_1.0 salva 1.0 em user_data."""
+        mock_update.callback_query.data = "set_speed_1.0"
+        configured_context.user_data = {}
+
+        await handle_callback(mock_update, configured_context)
+
+        assert configured_context.user_data.get("tts_speed") == 1.0
+        text = mock_update.callback_query.edit_message_text.call_args[0][0]
+        assert "Speed set to 1.0x" in text
+
+    def test_all_speed_options_valid(self):
+        """Todos os valores em SPEED_OPTIONS estao dentro do range esperado."""
+        assert all(0.75 <= s <= 1.25 for s in SPEED_OPTIONS)
+        assert len(SPEED_OPTIONS) == 5
+
+    def test_default_speed_by_level(self):
+        """Velocidades padrao estao corretas para cada nivel."""
+        assert DEFAULT_SPEED_BY_LEVEL["A1"] == 0.85
+        assert DEFAULT_SPEED_BY_LEVEL["A2"] == 0.9
+        assert DEFAULT_SPEED_BY_LEVEL["B1"] == 1.0
 
 
 class TestCallbackNavigation:

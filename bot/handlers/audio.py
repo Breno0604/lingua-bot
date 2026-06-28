@@ -21,7 +21,7 @@ from bot.services.deepgram import DeepgramService
 from bot.services.deepgram_tts import DEFAULT_VOICE_ID as DG_DEFAULT_VOICE_ID
 from bot.services.groq import GroqService
 from bot.services.level_manager import LevelManager
-from bot.utils.keyboards import conversation_buttons
+from bot.utils.keyboards import DEFAULT_SPEED_BY_LEVEL, conversation_buttons
 from bot.handlers.message import _extract_and_clean_reply
 
 logger = logging.getLogger(__name__)
@@ -143,16 +143,19 @@ async def handle_audio(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
     # 8. Gera audio da resposta
     # Primario: Deepgram Aura | Fallback: ElevenLabs Rachel
+    # Inclui velocidade personalizada do usuario
     audio_bytes = None
 
     if deepgram_tts:
         voice_id = context.user_data.get("voice_id", DG_DEFAULT_VOICE_ID)
-        audio_bytes = await deepgram_tts.generate_speech(display_text, voice_id=voice_id)
+        speed = context.user_data.get("tts_speed", DEFAULT_SPEED_BY_LEVEL.get(user_level, 1.0))
+        audio_bytes = await deepgram_tts.generate_speech(display_text, voice_id=voice_id, speed=speed)
 
     # Fallback: ElevenLabs
     if not audio_bytes and elevenlabs:
         logger.info("Deepgram Aura falhou, usando ElevenLabs fallback (audio msg)")
-        audio_bytes = await elevenlabs.generate_speech(display_text)
+        speed = context.user_data.get("tts_speed", 1.0)
+        audio_bytes = await elevenlabs.generate_speech(display_text, speed=speed)
 
     if audio_bytes:
         # Audio pronto: envia voz com botoes acoplados
