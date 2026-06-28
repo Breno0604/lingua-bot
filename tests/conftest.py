@@ -35,6 +35,9 @@ def mock_update():
     cq.answer = AsyncMock()
     cq.edit_message_text = AsyncMock()
     cq.from_user.id = 12345
+    cq.message = MagicMock()
+    cq.message.voice = None  # nao e mensagem de voz por padrao
+    cq.message.reply_text = AsyncMock()
     update.callback_query = cq
 
     return update

@@ -64,27 +64,42 @@ def _get_keyboard_for_screen(context: ContextTypes.DEFAULT_TYPE, expanded: bool 
 
 
 async def _expand_options(query, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Expande os botoes: substitui '+ More Options' pelos botoes reais + Hide."""
-    original_text = query.message.text or ""
+    """Expande os botoes: substitui '+ More Options' pelos botoes reais + Hide.
 
-    try:
-        await query.edit_message_text(
-            original_text + "\n\n✨ Loading...",
-            parse_mode="Markdown",
-        )
-        await asyncio.sleep(0.3)
-    except Exception as exc:
-        logger.warning("Loading animation skipped: %s", exc)
-
+    Para mensagens de voz (onde buttons estao no voice note), edita apenas
+    o reply_markup, pois o Telegram nao permite editar o texto de uma
+    mensagem de voz. Para mensagens de texto, mantem o comportamento
+    original com animacao de loading.
+    """
+    is_voice = query.message.voice is not None
     expanded_keyboard = _get_keyboard_for_screen(context, expanded=True)
-    try:
-        await query.edit_message_text(
-            original_text,
-            reply_markup=expanded_keyboard,
-            parse_mode="Markdown",
-        )
-    except Exception as exc:
-        logger.error("Falha ao expandir botoes: %s", exc)
+
+    if is_voice:
+        # Botoes estao na mensagem de voz: editar apenas o reply_markup
+        try:
+            await query.edit_message_reply_markup(reply_markup=expanded_keyboard)
+        except Exception as exc:
+            logger.error("Falha ao expandir botoes no audio: %s", exc)
+    else:
+        # Botoes estao na mensagem de texto: fluxo normal com animacao
+        original_text = query.message.text or ""
+        try:
+            await query.edit_message_text(
+                original_text + "\n\n✨ Loading...",
+                parse_mode="Markdown",
+            )
+            await asyncio.sleep(0.3)
+        except Exception as exc:
+            logger.warning("Loading animation skipped: %s", exc)
+
+        try:
+            await query.edit_message_text(
+                original_text,
+                reply_markup=expanded_keyboard,
+                parse_mode="Markdown",
+            )
+        except Exception as exc:
+            logger.error("Falha ao expandir botoes: %s", exc)
 
 
 async def _collapse_options(query, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -541,19 +556,35 @@ async def _call_groq_for(
     loading_text: str,
     expanded: bool = False,
 ) -> None:
-    """Helper para chamar o Groq com um prompt baseado na conversa atual."""
+    """Helper para chamar o Groq com um prompt baseado na conversa atual.
+
+    Se os botoes estiverem numa mensagem de voz (query.message.voice),
+    envia a resposta como uma nova mensagem em vez de editar a de voz,
+    pois o Telegram nao permite editar o texto de mensagens de voz.
+    """
     user_id = query.from_user.id
     groq: GroqService = context.bot_data.get("groq")
     conv_mgr: ConversationManager = context.bot_data.get("conversation_mgr")
     level_mgr: LevelManager = context.bot_data.get("level_manager")
 
+    is_voice = query.message.voice is not None
+
     if not groq or not conv_mgr:
-        await query.edit_message_text(
-            "Sorry, I'm not ready yet. Please try /start again! \U0001f64f"
-        )
+        if is_voice:
+            await query.message.reply_text(
+                "Sorry, I'm not ready yet. Please try /start again! \U0001f64f"
+            )
+        else:
+            await query.edit_message_text(
+                "Sorry, I'm not ready yet. Please try /start again! \U0001f64f"
+            )
         return
 
-    await query.edit_message_text(loading_text)
+    # Mostra loading — para voz, envia como nova mensagem
+    if is_voice:
+        loading = await query.message.reply_text(loading_text)
+    else:
+        await query.edit_message_text(loading_text)
 
     user_level = level_mgr.get_level(user_id) if level_mgr else "A1"
 
@@ -561,10 +592,16 @@ async def _call_groq_for(
     history = conv.get_formatted_history()
 
     if not history:
-        await query.edit_message_text(
-            "Let's start a conversation first! Type something and I'll help you practice! \U0001f60a",
-            reply_markup=back_to_menu_button(),
-        )
+        if is_voice:
+            await query.message.reply_text(
+                "Let's start a conversation first! Type something and I'll help you practice! \U0001f60a",
+                reply_markup=back_to_menu_button(),
+            )
+        else:
+            await query.edit_message_text(
+                "Let's start a conversation first! Type something and I'll help you practice! \U0001f60a",
+                reply_markup=back_to_menu_button(),
+            )
         return
 
     try:
@@ -579,14 +616,35 @@ async def _call_groq_for(
         conv.add_assistant_message(reply)
         conv.add_user_message(prompt_suffix)
 
-        await query.edit_message_text(
-            reply,
-            reply_markup=conversation_buttons(expanded=expanded),
-        )
+        if is_voice:
+            # Voz: envia resposta como nova mensagem e apaga loading
+            try:
+                await loading.delete()
+            except Exception:
+                pass
+            await query.message.reply_text(
+                reply,
+                reply_markup=conversation_buttons(expanded=expanded),
+            )
+        else:
+            await query.edit_message_text(
+                reply,
+                reply_markup=conversation_buttons(expanded=expanded),
+            )
     else:
-        await query.edit_message_text(
-            "Sorry, I had trouble thinking of something. Let's try again! \U0001f60a",
-            reply_markup=conversation_buttons(expanded=False),
-        )
+        if is_voice:
+            try:
+                await loading.delete()
+            except Exception:
+                pass
+            await query.message.reply_text(
+                "Sorry, I had trouble thinking of something. Let's try again! \U0001f60a",
+                reply_markup=conversation_buttons(expanded=False),
+            )
+        else:
+            await query.edit_message_text(
+                "Sorry, I had trouble thinking of something. Let's try again! \U0001f60a",
+                reply_markup=conversation_buttons(expanded=False),
+            )
 
 
