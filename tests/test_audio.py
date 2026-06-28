@@ -322,25 +322,29 @@ class TestTextBeforeAudio:
         ]
         assert len(text_calls) >= 1
         kwargs = text_calls[0].kwargs
-        # reply_text nao deve ter reply_markup — os botoes sao adicionados depois
+        # reply_text nao deve ter reply_markup — os botoes vao no reply_voice (quando audio existe)
+        # ou via edit_reply_markup (fallback quando audio falha)
         assert "reply_markup" not in kwargs, (
-            "Texto inicial nao deve ter botoes — eles sao adicionados via edit_reply_markup"
+            "Texto inicial nao deve ter botoes — eles vao no reply_voice ou edit_reply_markup"
         )
 
     @pytest.mark.asyncio
-    async def test_buttons_added_via_edit_after_audio(self, active_conversation):
-        """Os botoes sao adicionados ao texto via edit_reply_markup APOS o audio."""
+    async def test_buttons_on_voice_note_when_audio_succeeds(self, active_conversation):
+        """Quando audio existe, os botoes vao no reply_voice, nao no edit_reply_markup."""
         update, context = active_conversation
 
         await handle_audio(update, context)
 
-        # Obtem o mock da mensagem de texto retornada por reply_text
-        text_msg = update.message.reply_text.return_value
+        # Botoes devem estar no reply_voice
+        update.message.reply_voice.assert_called_once()
+        voice_kwargs = update.message.reply_voice.call_args.kwargs
+        assert "reply_markup" in voice_kwargs, (
+            "reply_voice deve ter reply_markup com os botoes quando audio existe"
+        )
 
-        # Verifica que edit_reply_markup foi chamado com os botoes
-        text_msg.edit_reply_markup.assert_called_once()
-        call_kwargs = text_msg.edit_reply_markup.call_args.kwargs
-        assert "reply_markup" in call_kwargs
+        # edit_reply_markup NAO deve ser chamado (so e usado quando audio falha)
+        text_msg = update.message.reply_text.return_value
+        text_msg.edit_reply_markup.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_voice_sent_separately_after_text(self, active_conversation):

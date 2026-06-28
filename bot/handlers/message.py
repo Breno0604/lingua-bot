@@ -153,26 +153,25 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             logger.info("Deepgram Aura falhou, usando ElevenLabs fallback (text msg)")
             audio_bytes = await elevenlabs.generate_speech(display_text)
 
-        # 7. Envia texto imediatamente — SEM botoes
-        # Os botoes serao adicionados apos o audio via edit_reply_markup
-        text_msg = await update.message.reply_text(display_text)
-
         if audio_bytes:
-            await update.message.reply_voice(voice=audio_bytes)
+            # Audio pronto: texto sem botoes + voz com botoes acoplados
+            await update.message.reply_text(display_text)
+            await update.message.reply_voice(
+                voice=audio_bytes,
+                reply_markup=conversation_buttons(expanded=False),
+            )
         else:
-            # Se usuario escolheu Deepgram e falhou, avisa brevemente
+            # Sem audio: envia texto com botoes diretamente
             voice_id = context.user_data.get("voice_id", DG_DEFAULT_VOICE_ID)
             if voice_id != DG_DEFAULT_VOICE_ID:
-                await update.message.reply_text(
-                    "\U0001f3b6 *Audio tip:* The voice you selected isn't generating audio. "
-                    "Use /voice to try a different one.",
-                    parse_mode="Markdown",
+                display_text += (
+                    "\n\n\U0001f3b6 *Audio tip:* The voice you selected isn't generating audio. "
+                    "Use /voice to try a different one."
                 )
-
-        # 8. Adiciona botoes ao texto agora que o audio foi enviado
-        await text_msg.edit_reply_markup(
-            reply_markup=conversation_buttons(expanded=False),
-        )
+            await update.message.reply_text(
+                display_text,
+                reply_markup=conversation_buttons(expanded=False),
+            )
     else:
         await update.message.reply_text(
             "Sorry, I'm having trouble thinking right now. "
