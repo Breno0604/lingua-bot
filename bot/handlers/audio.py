@@ -18,9 +18,11 @@ from telegram.ext import ContextTypes
 from bot.database import BaseDatabase
 from bot.services.conversation import ConversationManager
 from bot.services.deepgram import DeepgramService
+from bot.handlers.voice_command import _load_audio_prefs_from_db
 from bot.services.deepgram_tts import DEFAULT_VOICE_ID as DG_DEFAULT_VOICE_ID
 from bot.services.groq import GroqService
 from bot.services.level_manager import LevelManager
+from bot.services.tts_orchestrator import TTSOrchestrator
 from bot.utils.keyboards import DEFAULT_SPEED_BY_LEVEL, conversation_buttons
 from bot.handlers.message import _extract_and_clean_reply
 
@@ -50,8 +52,6 @@ async def handle_audio(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     db: BaseDatabase = context.bot_data.get("db")
     level_mgr: LevelManager = context.bot_data.get("level_manager")
     deepgram_stt: DeepgramService = context.bot_data.get("deepgram")
-    deepgram_tts = context.bot_data.get("deepgram_tts")
-    elevenlabs = context.bot_data.get("elevenlabs")
 
     if not groq or not conversation_mgr or not db or not deepgram_stt:
         logger.error("Servicos de audio nao inicializados no bot_data")
@@ -100,6 +100,9 @@ async def handle_audio(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         parse_mode="Markdown",
     )
 
+    # Carrega preferencias do banco (voz, velocidade) se necessario
+    await _load_audio_prefs_from_db(context, user_id)
+
     # 6. Entra no fluxo normal da conversa (Groq)
     user_level = level_mgr.get_level(user_id) if level_mgr else "A1"
     conv.add_user_message(transcribed_text)
@@ -141,21 +144,13 @@ async def handle_audio(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     # 7. Envia texto imediatamente (antes do audio) — SEM botoes
     text_msg = await update.message.reply_text(display_text)
 
-    # 8. Gera audio da resposta
-    # Primario: Deepgram Aura | Fallback: ElevenLabs Rachel
-    # Inclui velocidade personalizada do usuario
+    # 8. Gera audio via TTSOrchestrator (Deepgram Aura + ElevenLabs fallback)
+    tts: TTSOrchestrator = context.bot_data.get("tts_orchestrator")
     audio_bytes = None
-
-    if deepgram_tts:
+    if tts:
         voice_id = context.user_data.get("voice_id", DG_DEFAULT_VOICE_ID)
         speed = context.user_data.get("tts_speed", DEFAULT_SPEED_BY_LEVEL.get(user_level, 1.0))
-        audio_bytes = await deepgram_tts.generate_speech(display_text, voice_id=voice_id, speed=speed)
-
-    # Fallback: ElevenLabs
-    if not audio_bytes and elevenlabs:
-        logger.info("Deepgram Aura falhou, usando ElevenLabs fallback (audio msg)")
-        speed = context.user_data.get("tts_speed", 1.0)
-        audio_bytes = await elevenlabs.generate_speech(display_text, speed=speed)
+        audio_bytes = await tts.generate_audio(display_text, voice_id=voice_id, speed=speed)
 
     if audio_bytes:
         # Audio pronto: envia voz com botoes acoplados

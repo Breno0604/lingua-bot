@@ -32,6 +32,15 @@ class VocabEntry:
     level: str = "A1"
 
 
+@dataclass
+class UserPreferences:
+    """Preferencias do usuario persistidas em banco."""
+    user_id: int
+    level: str = "A1"
+    voice_id: Optional[str] = None
+    tts_speed: Optional[float] = None
+
+
 class BaseDatabase(ABC):
     """Interface abstrata para operacoes de banco de dados."""
 
@@ -72,6 +81,22 @@ class BaseDatabase(ABC):
         """Incrementa o contador de pratica de uma palavra."""
         ...
 
+    @abstractmethod
+    async def get_user_preferences(self, user_id: int) -> UserPreferences:
+        """Retorna as preferencias do usuario."""
+        ...
+
+    @abstractmethod
+    async def set_user_preferences(
+        self,
+        user_id: int,
+        level: Optional[str] = None,
+        voice_id: Optional[str] = None,
+        tts_speed: Optional[float] = None,
+    ) -> None:
+        """Atualiza as preferencias do usuario (so os campos fornecidos)."""
+        ...
+
 
 class SQLiteDatabase(BaseDatabase):
     """Implementacao local com SQLite (para desenvolvimento)."""
@@ -101,6 +126,15 @@ class SQLiteDatabase(BaseDatabase):
                     reviewed_at TIMESTAMP,
                     practice_count INTEGER DEFAULT 0,
                     UNIQUE(user_id, word)
+                )
+            """)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS user_preferences (
+                    user_id INTEGER PRIMARY KEY,
+                    level TEXT NOT NULL DEFAULT 'A1',
+                    voice_id TEXT,
+                    tts_speed REAL,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """)
             conn.commit()
@@ -211,6 +245,55 @@ class SQLiteDatabase(BaseDatabase):
         finally:
             conn.close()
 
+    async def get_user_preferences(self, user_id: int) -> UserPreferences:
+        """Retorna as preferencias do usuario (defaults se nao existir)."""
+        conn = self._get_connection()
+        try:
+            row = conn.execute(
+                "SELECT * FROM user_preferences WHERE user_id = ?",
+                (user_id,),
+            ).fetchone()
+            if row:
+                return UserPreferences(
+                    user_id=row["user_id"],
+                    level=row["level"],
+                    voice_id=row["voice_id"],
+                    tts_speed=row["tts_speed"],
+                )
+            return UserPreferences(user_id=user_id)
+        finally:
+            conn.close()
+
+    async def set_user_preferences(
+        self,
+        user_id: int,
+        level: Optional[str] = None,
+        voice_id: Optional[str] = None,
+        tts_speed: Optional[float] = None,
+    ) -> None:
+        """Atualiza as preferencias do usuario (UPSERT)."""
+        conn = self._get_connection()
+        try:
+            # Primeiro, pega valores existentes para nao sobrescrever com None
+            current = await self.get_user_preferences(user_id)
+            new_level = level if level is not None else current.level
+            new_voice = voice_id if voice_id is not None else current.voice_id
+            new_speed = tts_speed if tts_speed is not None else current.tts_speed
+
+            conn.execute(
+                """INSERT INTO user_preferences (user_id, level, voice_id, tts_speed, updated_at)
+                   VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+                   ON CONFLICT(user_id) DO UPDATE SET
+                       level = excluded.level,
+                       voice_id = excluded.voice_id,
+                       tts_speed = excluded.tts_speed,
+                       updated_at = CURRENT_TIMESTAMP""",
+                (user_id, new_level, new_voice, new_speed),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
 
 class SupabaseDatabase(BaseDatabase):
     """Implementacao para producao com Supabase (PostgreSQL)."""
@@ -309,6 +392,51 @@ class SupabaseDatabase(BaseDatabase):
                     "reviewed_at": datetime.utcnow().isoformat(),
                 }
             ).eq("id", word_id).eq("user_id", user_id).execute()
+
+    async def get_user_preferences(self, user_id: int) -> UserPreferences:
+        """Retorna as preferencias do usuario do Supabase."""
+        try:
+            response = (
+                self._client.table("user_preferences")
+                .select("*")
+                .eq("user_id", user_id)
+                .execute()
+            )
+            if response.data:
+                item = response.data[0]
+                return UserPreferences(
+                    user_id=item["user_id"],
+                    level=item.get("level", "A1"),
+                    voice_id=item.get("voice_id"),
+                    tts_speed=item.get("tts_speed"),
+                )
+            return UserPreferences(user_id=user_id)
+        except Exception as e:
+            logger.error("Erro ao buscar preferencias: %s", e)
+            return UserPreferences(user_id=user_id)
+
+    async def set_user_preferences(
+        self,
+        user_id: int,
+        level: Optional[str] = None,
+        voice_id: Optional[str] = None,
+        tts_speed: Optional[float] = None,
+    ) -> None:
+        """Atualiza as preferencias do usuario no Supabase (upsert)."""
+        try:
+            current = await self.get_user_preferences(user_id)
+            data = {
+                "user_id": user_id,
+                "level": level if level is not None else current.level,
+                "voice_id": voice_id if voice_id is not None else current.voice_id,
+                "tts_speed": tts_speed if tts_speed is not None else current.tts_speed,
+                "updated_at": datetime.utcnow().isoformat(),
+            }
+            self._client.table("user_preferences").upsert(
+                data, on_conflict=["user_id"]
+            ).execute()
+        except Exception as e:
+            logger.error("Erro ao salvar preferencias: %s", e)
 
 
 def create_database(config) -> BaseDatabase:

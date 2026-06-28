@@ -16,6 +16,14 @@ from bot.database import VocabEntry
 
 
 @pytest.fixture
+def mock_tts_orchestrator():
+    """Mock do TTSOrchestrator — retorna audio com sucesso."""
+    tts = MagicMock()
+    tts.generate_audio = AsyncMock(return_value=b"fake_tts_audio")
+    return tts
+
+
+@pytest.fixture
 def mock_update():
     """Cria um mock de Update do Telegram com suporte a await."""
     update = MagicMock()
@@ -59,6 +67,8 @@ def mock_db():
     db.get_vocab = AsyncMock(return_value=[])
     db.get_vocab_count = AsyncMock(return_value=0)
     db.practice_word = AsyncMock()
+    db.get_user_preferences = AsyncMock(return_value=None)
+    db.set_user_preferences = AsyncMock()
     return db
 
 

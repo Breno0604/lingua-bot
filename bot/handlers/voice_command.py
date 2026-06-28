@@ -12,10 +12,28 @@ import logging
 from telegram import Update
 from telegram.ext import ContextTypes
 
+from bot.database import BaseDatabase
 from bot.services.deepgram_tts import VOICE_MAP, DEFAULT_VOICE_ID
 from bot.utils.keyboards import DEFAULT_SPEED_BY_LEVEL, voice_selection_keyboard
 
 logger = logging.getLogger(__name__)
+
+
+async def _load_audio_prefs_from_db(context: ContextTypes.DEFAULT_TYPE, user_id: int) -> None:
+    """Carrega voice_id e tts_speed do banco para user_data se nao estiverem em cache."""
+    if "voice_id" in context.user_data and "tts_speed" in context.user_data:
+        return  # Ja carregados
+    db: BaseDatabase = context.bot_data.get("db")
+    if not db:
+        return
+    try:
+        prefs = await db.get_user_preferences(user_id)
+        if "voice_id" not in context.user_data and prefs.voice_id:
+            context.user_data["voice_id"] = prefs.voice_id
+        if "tts_speed" not in context.user_data and prefs.tts_speed is not None:
+            context.user_data["tts_speed"] = prefs.tts_speed
+    except Exception as e:
+        logger.warning("Erro ao carregar preferencias de audio: %s", e)
 
 
 async def voice_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -29,11 +47,15 @@ async def voice_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         )
         return
 
+    user_id = update.effective_user.id
+
+    # Carrega preferencias do banco se necessario
+    await _load_audio_prefs_from_db(context, user_id)
+
     current_voice_id = context.user_data.get("voice_id", DEFAULT_VOICE_ID)
     current_name, current_desc = VOICE_MAP.get(current_voice_id, ("Unknown", ""))
 
     # Resolve velocidade padrao baseada no nivel se nao foi personalizada
-    user_id = update.effective_user.id
     level_mgr = context.bot_data.get("level_manager")
     user_level = level_mgr.get_level(user_id) if level_mgr else "A1"
     default_speed = DEFAULT_SPEED_BY_LEVEL.get(user_level, 1.0)

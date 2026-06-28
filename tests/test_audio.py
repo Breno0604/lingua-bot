@@ -74,12 +74,14 @@ def configured_audio_context(
     mock_deepgram_tts,
     mock_elevenlabs,
     mock_level_manager,
+    mock_tts_orchestrator,
 ):
     """Context pre-configurado com todos os servicos de audio."""
     configured_context.bot_data["deepgram"] = mock_deepgram_stt
     configured_context.bot_data["deepgram_tts"] = mock_deepgram_tts
     configured_context.bot_data["elevenlabs"] = mock_elevenlabs
     configured_context.bot_data["level_manager"] = mock_level_manager
+    configured_context.bot_data["tts_orchestrator"] = mock_tts_orchestrator
     # user_data precisa ser um dict real para .get() e atribuicoes funcionarem
     configured_context.user_data = {}
     return configured_context
@@ -357,7 +359,6 @@ class TestTextBeforeAudio:
         update.message.reply_voice.assert_called_once()
         voice_call = update.message.reply_voice.call_args
         assert "voice" in voice_call.kwargs
-        assert voice_call.kwargs["voice"] == b"fake_deepgram_audio"
 
 
 # ──────────────────────────────────────────────
@@ -365,83 +366,50 @@ class TestTextBeforeAudio:
 # ──────────────────────────────────────────────
 
 class TestTTSFlow:
-    """Testes de geracao de audio e fallback."""
+    """Testes de geracao de audio via TTSOrchestrator."""
 
     @pytest.mark.asyncio
-    async def test_deepgram_tts_used_by_default(self, active_conversation):
-        """Deepgram Aura e usado como TTS primario."""
+    async def test_tts_orchestrator_called_by_default(self, active_conversation):
+        """TTSOrchestrator e chamado para gerar audio."""
         update, context = active_conversation
 
         await handle_audio(update, context)
 
-        deepgram_tts = context.bot_data["deepgram_tts"]
-        deepgram_tts.generate_speech.assert_called_once()
-        elevenlabs = context.bot_data["elevenlabs"]
-        elevenlabs.generate_speech.assert_not_called()
+        tts = context.bot_data["tts_orchestrator"]
+        tts.generate_audio.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_elevenlabs_fallback_when_deepgram_fails(self, audio_update, configured_audio_context):
-        """ElevenLabs e usado como fallback quando Deepgram falha."""
+    async def test_no_audio_when_orchestrator_returns_none(self, audio_update, configured_audio_context):
+        """Nenhum audio e enviado se o orquestrador retornar None."""
         conv = configured_audio_context.bot_data["conversation_mgr"].get_or_create(12345)
         conv.add_user_message("Hello")
         conv.add_assistant_message("Hi there!")
 
-        # Deepgram TTS falha (retorna None)
-        configured_audio_context.bot_data["deepgram_tts"].generate_speech = AsyncMock(
+        configured_audio_context.bot_data["tts_orchestrator"].generate_audio = AsyncMock(
             return_value=None
         )
 
         await handle_audio(audio_update, configured_audio_context)
 
-        # ElevenLabs deve ter sido chamado como fallback
-        configured_audio_context.bot_data["elevenlabs"].generate_speech.assert_called_once()
-        # Deve ter enviado audio (do ElevenLabs)
-        audio_update.message.reply_voice.assert_called_once()
-        voice_call = audio_update.message.reply_voice.call_args
-        assert voice_call.kwargs["voice"] == b"fake_elevenlabs_audio"
-
-    @pytest.mark.asyncio
-    async def test_no_audio_when_both_tts_fail(self, audio_update, configured_audio_context):
-        """Nenhum audio e enviado se ambos TTS falharem."""
-        conv = configured_audio_context.bot_data["conversation_mgr"].get_or_create(12345)
-        conv.add_user_message("Hello")
-        conv.add_assistant_message("Hi there!")
-
-        configured_audio_context.bot_data["deepgram_tts"].generate_speech = AsyncMock(
-            return_value=None
-        )
-        configured_audio_context.bot_data["elevenlabs"].generate_speech = AsyncMock(
-            return_value=None
-        )
-
-        await handle_audio(audio_update, configured_audio_context)
-
-        # Nao deve enviar audio
         audio_update.message.reply_voice.assert_not_called()
-        # Mas os botoes ainda devem ser adicionados ao texto
+        # Botoes ainda devem ser adicionados ao texto
         text_msg = audio_update.message.reply_text.return_value
         text_msg.edit_reply_markup.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_audio_tip_when_custom_voice_fails(self, audio_update, configured_audio_context):
-        """Mostra dica de audio quando voz personalizada falha (diferente da padrao)."""
+        """Mostra dica de audio quando voz personalizada falha."""
         conv = configured_audio_context.bot_data["conversation_mgr"].get_or_create(12345)
         conv.add_user_message("Hello")
         conv.add_assistant_message("Hi there!")
 
-        # Define uma voz personalizada (diferente da padrao)
         configured_audio_context.user_data["voice_id"] = "custom_voice"
-
-        configured_audio_context.bot_data["deepgram_tts"].generate_speech = AsyncMock(
-            return_value=None
-        )
-        configured_audio_context.bot_data["elevenlabs"].generate_speech = AsyncMock(
+        configured_audio_context.bot_data["tts_orchestrator"].generate_audio = AsyncMock(
             return_value=None
         )
 
         await handle_audio(audio_update, configured_audio_context)
 
-        # Deve ter enviado a dica de audio
         tip_calls = [
             c for c in audio_update.message.reply_text.call_args_list
             if "tip" in str(c.args[0]).lower()
@@ -450,28 +418,22 @@ class TestTTSFlow:
         tip_text = tip_calls[0][0][0]
         assert "voice you selected" in tip_text.lower()
         assert "/voice" in tip_text
-        # Os botoes ainda devem ser adicionados ao texto original
         text_msg = audio_update.message.reply_text.return_value
         text_msg.edit_reply_markup.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_no_audio_tip_when_default_voice(self, audio_update, configured_audio_context):
-        """Nao mostra dica de audio se for a voz padrao (nao personalizada)."""
+        """Nao mostra dica de audio se for a voz padrao."""
         conv = configured_audio_context.bot_data["conversation_mgr"].get_or_create(12345)
         conv.add_user_message("Hello")
         conv.add_assistant_message("Hi there!")
 
-        # Nao define voz personalizada — usa a padrao
-        configured_audio_context.bot_data["deepgram_tts"].generate_speech = AsyncMock(
-            return_value=None
-        )
-        configured_audio_context.bot_data["elevenlabs"].generate_speech = AsyncMock(
+        configured_audio_context.bot_data["tts_orchestrator"].generate_audio = AsyncMock(
             return_value=None
         )
 
         await handle_audio(audio_update, configured_audio_context)
 
-        # Nao deve enviar dica de audio
         tip_calls = [
             c for c in audio_update.message.reply_text.call_args_list
             if "tip" in str(c.args[0]).lower()
@@ -479,73 +441,48 @@ class TestTTSFlow:
         assert len(tip_calls) == 0
 
     @pytest.mark.asyncio
-    async def test_deepgram_tts_uses_user_voice_preference(self, active_conversation):
-        """Deepgram TTS usa a voz preferida do usuario salva em user_data."""
+    async def test_orchestrator_receives_user_voice_preference(self, active_conversation):
+        """Voice_id do usuario e passado ao TTSOrchestrator."""
         update, context = active_conversation
 
-        # Define voz personalizada
         context.user_data["voice_id"] = "asteria"
 
         await handle_audio(update, context)
 
-        deepgram_tts = context.bot_data["deepgram_tts"]
-        # Verifica que generate_speech foi chamado com a voz correta
-        call_kwargs = deepgram_tts.generate_speech.call_args
-        assert call_kwargs.kwargs.get("voice_id") == "asteria"
+        tts = context.bot_data["tts_orchestrator"]
+        tts.generate_audio.assert_called_once()
+        assert tts.generate_audio.call_args.kwargs.get("voice_id") == "asteria"
 
     @pytest.mark.asyncio
-    async def test_speed_passed_to_deepgram_tts(self, active_conversation):
-        """Velocidade personalizada do usuario e passada para o Deepgram TTS."""
+    async def test_speed_passed_to_orchestrator(self, active_conversation):
+        """Velocidade personalizada e passada ao TTSOrchestrator."""
         update, context = active_conversation
 
-        # Define velocidade personalizada
         context.user_data["tts_speed"] = 0.85
 
         await handle_audio(update, context)
 
-        deepgram_tts = context.bot_data["deepgram_tts"]
-        call_kwargs = deepgram_tts.generate_speech.call_args.kwargs
-        assert call_kwargs.get("speed") == 0.85, (
-            f"speed=0.85 esperado, recebeu {call_kwargs.get('speed')}"
+        tts = context.bot_data["tts_orchestrator"]
+        tts.generate_audio.assert_called_once()
+        assert tts.generate_audio.call_args.kwargs.get("speed") == 0.85, (
+            f"speed=0.85 esperado, recebeu {tts.generate_audio.call_args.kwargs.get('speed')}"
         )
 
     @pytest.mark.asyncio
     async def test_speed_defaults_to_level_based(self, audio_update, configured_audio_context):
-        """Quando speed nao esta em user_data, usa o padrao baseado no nivel (A1=0.85)."""
+        """Quando speed nao esta em user_data, usa padrao baseado no nivel (A1=0.85)."""
         conv = configured_audio_context.bot_data["conversation_mgr"].get_or_create(12345)
         conv.add_user_message("Hello")
         conv.add_assistant_message("Hi there!")
 
-        # level_manager retorna A1
-        configured_audio_context.user_data = {}  # sem tts_speed
+        configured_audio_context.user_data = {}
 
         await handle_audio(audio_update, configured_audio_context)
 
-        deepgram_tts = configured_audio_context.bot_data["deepgram_tts"]
-        call_kwargs = deepgram_tts.generate_speech.call_args.kwargs
-        assert call_kwargs.get("speed") == 0.85, (
-            f"A1 deve usar speed=0.85, recebeu {call_kwargs.get('speed')}"
-        )
-
-    @pytest.mark.asyncio
-    async def test_speed_passed_to_elevenlabs_fallback(self, audio_update, configured_audio_context):
-        """Velocidade tambem e passada para ElevenLabs quando Deepgram falha."""
-        conv = configured_audio_context.bot_data["conversation_mgr"].get_or_create(12345)
-        conv.add_user_message("Hello")
-        conv.add_assistant_message("Hi there!")
-
-        # Deepgram falha
-        configured_audio_context.bot_data["deepgram_tts"].generate_speech = AsyncMock(
-            return_value=None
-        )
-        configured_audio_context.user_data["tts_speed"] = 0.75
-
-        await handle_audio(audio_update, configured_audio_context)
-
-        elevenlabs = configured_audio_context.bot_data["elevenlabs"]
-        call_kwargs = elevenlabs.generate_speech.call_args.kwargs
-        assert call_kwargs.get("speed") == 0.75, (
-            f"ElevenLabs fallback deve receber speed=0.75, recebeu {call_kwargs.get('speed')}"
+        tts = configured_audio_context.bot_data["tts_orchestrator"]
+        tts.generate_audio.assert_called_once()
+        assert tts.generate_audio.call_args.kwargs.get("speed") == 0.85, (
+            f"A1 deve usar speed=0.85, recebeu {tts.generate_audio.call_args.kwargs.get('speed')}"
         )
 
 

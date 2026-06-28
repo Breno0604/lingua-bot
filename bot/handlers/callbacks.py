@@ -184,9 +184,10 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 # ──────────────────────────────────────────────
 
 async def _set_level(query, context: ContextTypes.DEFAULT_TYPE, level: str) -> None:
-    """Define o nivel do usuario e confirma."""
+    """Define o nivel do usuario e confirma. Persiste no banco."""
     user_id = query.from_user.id
     level_mgr: LevelManager = context.bot_data.get("level_manager")
+    db: BaseDatabase = context.bot_data.get("db")
 
     if not level_mgr:
         await query.edit_message_text(
@@ -200,6 +201,8 @@ async def _set_level(query, context: ContextTypes.DEFAULT_TYPE, level: str) -> N
             reply_markup=back_to_menu_button(),
         )
         return
+
+    await level_mgr.persist_level(user_id)
 
     label = level_mgr.get_label(level)
     confirmation = level_mgr.get_confirmation(level)
@@ -222,7 +225,7 @@ async def _set_level(query, context: ContextTypes.DEFAULT_TYPE, level: str) -> N
 
 
 async def _set_voice(query, context: ContextTypes.DEFAULT_TYPE, voice_id: str) -> None:
-    """Define a voz do usuario (Deepgram Aura) e confirma."""
+    """Define a voz do usuario (Deepgram Aura) e confirma. Persiste no banco."""
     deepgram_tts = context.bot_data.get("deepgram_tts")
     if not deepgram_tts:
         await query.edit_message_text(
@@ -241,8 +244,14 @@ async def _set_voice(query, context: ContextTypes.DEFAULT_TYPE, voice_id: str) -
 
     name, desc = DG_VOICE_MAP[voice_id]
 
-    # Salva a preferencia do usuario
+    # Salva a preferencia do usuario (user_data + banco)
     context.user_data["voice_id"] = voice_id
+    db: BaseDatabase = context.bot_data.get("db")
+    if db:
+        try:
+            await db.set_user_preferences(user_id=query.from_user.id, voice_id=voice_id)
+        except Exception as e:
+            logger.error("Erro ao persistir voice_id: %s", e)
 
     text = (
         f"\u2705 **Voice updated to {name}!**\n\n"
@@ -259,9 +268,15 @@ async def _set_voice(query, context: ContextTypes.DEFAULT_TYPE, voice_id: str) -
 
 
 async def _set_speed(query, context: ContextTypes.DEFAULT_TYPE, speed: float) -> None:
-    """Define a velocidade do TTS para o usuario e confirma."""
-    # Salva preferencia
+    """Define a velocidade do TTS para o usuario e confirma. Persiste no banco."""
+    # Salva preferencia (user_data + banco)
     context.user_data["tts_speed"] = speed
+    db: BaseDatabase = context.bot_data.get("db")
+    if db:
+        try:
+            await db.set_user_preferences(user_id=query.from_user.id, tts_speed=speed)
+        except Exception as e:
+            logger.error("Erro ao persistir tts_speed: %s", e)
 
     # Indicador visual da velocidade
     speed_labels = {

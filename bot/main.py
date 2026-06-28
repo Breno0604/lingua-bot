@@ -35,6 +35,7 @@ from bot.services.deepgram_tts import DeepgramTTSService
 from bot.services.elevenlabs import ElevenLabsService
 from bot.services.groq import GroqService
 from bot.services.level_manager import LevelManager
+from bot.services.tts_orchestrator import TTSOrchestrator
 from bot.utils.rate_limiter import RateLimiter
 
 logging.basicConfig(
@@ -51,7 +52,7 @@ def build_application() -> Application:
     groq = GroqService(config)
     conversation_mgr = ConversationManager(max_turns=config.max_history_turns)
     rate_limiter = RateLimiter(daily_limit=config.daily_limit, persist=True)
-    level_mgr = LevelManager(default_level="A1")
+    level_mgr = LevelManager(default_level="A1", db=db)
 
     application = Application.builder().token(config.bot_token).build()
 
@@ -88,6 +89,14 @@ def build_application() -> Application:
             elevenlabs_service = ElevenLabsService(api_key=config.elevenlabs_api_key)
             application.bot_data["elevenlabs"] = elevenlabs_service
             logger.info("ElevenLabs TTS inicializado (fallback)")
+
+        # TTS Orchestrator (unifica Deepgram primario + ElevenLabs fallback)
+        tts_orchestrator = TTSOrchestrator(
+            deepgram_tts=deepgram_tts_service,
+            elevenlabs=elevenlabs_service if config.elevenlabs_api_key else None,
+        )
+        application.bot_data["tts_orchestrator"] = tts_orchestrator
+        logger.info("TTSOrchestrator inicializado")
 
         # Handler de mensagens de voz (depende de Deepgram STT)
         application.add_handler(

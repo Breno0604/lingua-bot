@@ -1,18 +1,22 @@
 """
 LinguaBot --- Level Manager
 
-Gerencia o nivel de proficiencia de cada usuario em memoria.
+Gerencia o nivel de proficiencia de cada usuario.
 Suporta A1, A2, B1 com labels e mensagens de confirmacao.
 
-O nivel e armazenado apenas em RAM. Se o bot reiniciar,
-o usuario volta para A1 (default) e precisa redefinir via /level.
+O nivel e sincronizado com o banco de dados (SQLite / Supabase)
+quando disponivel, permitindo persistencia entre restarts.
+
+Se nao houver banco configurado, funciona apenas em RAM (fallback).
 """
 
 from typing import Dict, Optional
 
+from bot.database import BaseDatabase
+
 
 class LevelManager:
-    """Gerencia o nivel de proficiencia de cada usuario em memoria."""
+    """Gerencia o nivel de proficiencia de cada usuario com persistencia."""
 
     VALID_LEVELS = ["A1", "A2", "B1"]
 
@@ -37,20 +41,61 @@ class LevelManager:
         ),
     }
 
-    def __init__(self, default_level: str = "A1"):
+    def __init__(self, default_level: str = "A1", db: Optional[BaseDatabase] = None):
         self.default_level = default_level
+        self.db = db
+        # Cache em memoria (evita ler do banco a cada chamada)
         self._levels: Dict[int, str] = {}
 
+    async def load_level(self, user_id: int) -> str:
+        """Carrega o nivel do banco e atualiza o cache.
+
+        Retorna o nivel persistido, ou default se nao existir.
+        """
+        if self.db:
+            try:
+                prefs = await self.db.get_user_preferences(user_id)
+                if prefs.level:
+                    self._levels[user_id] = prefs.level
+                    return prefs.level
+            except Exception as e:
+                __import__("logging").getLogger(__name__).warning(
+                    "Erro ao carregar nivel do banco: %s", e
+                )
+        return self.get_level(user_id)
+
     def get_level(self, user_id: int) -> str:
-        """Retorna o nivel do usuario (default: A1 se nunca definiu)."""
+        """Retorna o nivel do usuario (cache primeiro, depois default)."""
         return self._levels.get(user_id, self.default_level)
 
     def set_level(self, user_id: int, level: str) -> bool:
-        """Define o nivel do usuario. Retorna False se nivel invalido."""
+        """Define o nivel do usuario em cache.
+
+        NOTA: Este metodo e SYNC para compatibilidade com codigo
+        existente. Para persistir no banco, chave persist_level()
+        separadamente.
+
+        Returns:
+            False se nivel invalido, True se sucesso.
+        """
         if level not in self.VALID_LEVELS:
             return False
         self._levels[user_id] = level
         return True
+
+    async def persist_level(self, user_id: int) -> None:
+        """Persiste o nivel atual do usuario no banco de dados."""
+        if not self.db:
+            return
+        level = self._levels.get(user_id)
+        if not level:
+            return
+        try:
+            await self.db.set_user_preferences(user_id, level=level)
+        except Exception as e:
+            __import__("logging").getLogger(__name__).error(
+                "Erro ao persistir nivel para user %d: %s", user_id, e
+            )
 
     def get_label(self, level: str) -> str:
         """Retorna o label amigavel para um nivel."""
@@ -65,5 +110,5 @@ class LevelManager:
         self._levels.pop(user_id, None)
 
     def has_level(self, user_id: int) -> bool:
-        """Verifica se o usuario ja definiu um nivel explicitamente."""
+        """Verifica se o usuario ja definiu um nivel explicitamente (em cache)."""
         return user_id in self._levels

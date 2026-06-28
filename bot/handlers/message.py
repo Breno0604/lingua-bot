@@ -16,7 +16,9 @@ from bot.database import BaseDatabase
 from bot.services.conversation import ConversationManager
 from bot.services.deepgram_tts import DEFAULT_VOICE_ID as DG_DEFAULT_VOICE_ID
 from bot.services.groq import GroqService
+from bot.handlers.voice_command import _load_audio_prefs_from_db
 from bot.services.level_manager import LevelManager
+from bot.services.tts_orchestrator import TTSOrchestrator
 from bot.utils.keyboards import DEFAULT_SPEED_BY_LEVEL, conversation_buttons
 from bot.utils.rate_limiter import RateLimiter
 
@@ -138,23 +140,16 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
         context.user_data["screen_type"] = "conversation"
 
-        # ── Gera audio da resposta ──
-        # Primario: Deepgram Aura | Fallback: ElevenLabs Rachel
-        # Inclui velocidade personalizada do usuario
-        deepgram_tts = context.bot_data.get("deepgram_tts")
-        elevenlabs = context.bot_data.get("elevenlabs")
-        audio_bytes = None
+        # Carrega preferencias do banco (voz, velocidade) se necessario
+        await _load_audio_prefs_from_db(context, user_id)
 
-        if deepgram_tts:
+        # ── Gera audio via TTSOrchestrator (Deepgram Aura + ElevenLabs fallback) ──
+        tts: TTSOrchestrator = context.bot_data.get("tts_orchestrator")
+        audio_bytes = None
+        if tts:
             voice_id = context.user_data.get("voice_id", DG_DEFAULT_VOICE_ID)
             speed = context.user_data.get("tts_speed", DEFAULT_SPEED_BY_LEVEL.get(user_level, 1.0))
-            audio_bytes = await deepgram_tts.generate_speech(display_text, voice_id=voice_id, speed=speed)
-
-        # Fallback: ElevenLabs
-        if not audio_bytes and elevenlabs:
-            logger.info("Deepgram Aura falhou, usando ElevenLabs fallback (text msg)")
-            speed = context.user_data.get("tts_speed", 1.0)
-            audio_bytes = await elevenlabs.generate_speech(display_text, speed=speed)
+            audio_bytes = await tts.generate_audio(display_text, voice_id=voice_id, speed=speed)
 
         if audio_bytes:
             # Audio pronto: texto sem botoes + voz com botoes acoplados
