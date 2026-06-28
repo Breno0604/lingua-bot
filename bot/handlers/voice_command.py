@@ -33,6 +33,7 @@ async def voice_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     current_name, current_desc = VOICE_MAP.get(current_voice_id, ("Unknown", ""))
 
     # Resolve velocidade padrao baseada no nivel se nao foi personalizada
+    user_id = update.effective_user.id
     level_mgr = context.bot_data.get("level_manager")
     user_level = level_mgr.get_level(user_id) if level_mgr else "A1"
     default_speed = DEFAULT_SPEED_BY_LEVEL.get(user_level, 1.0)
