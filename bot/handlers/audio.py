@@ -138,7 +138,13 @@ async def handle_audio(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
     display_text = clean_reply if clean_reply else reply
 
-    # 7. Gera audio da resposta
+    # 7. Envia texto imediatamente (antes do audio)
+    await update.message.reply_text(
+        display_text,
+        reply_markup=conversation_buttons(expanded=False),
+    )
+
+    # 8. Gera audio da resposta
     # Primario: Deepgram Aura | Fallback: ElevenLabs Rachel
     audio_bytes = None
 
@@ -152,28 +158,12 @@ async def handle_audio(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         audio_bytes = await elevenlabs.generate_speech(display_text)
 
     if audio_bytes:
-        try:
-            await preview.delete()
-        except Exception:
-            pass
-
-        context.user_data["has_audio"] = True
-
         await update.message.reply_voice(voice=audio_bytes)
-        await update.message.reply_text(
-            display_text,
-            reply_markup=conversation_buttons(expanded=False, has_audio=True),
-        )
     else:
-        # Fallback: so texto
         voice_id = context.user_data.get("voice_id", DG_DEFAULT_VOICE_ID)
         if voice_id != DG_DEFAULT_VOICE_ID:
-            display_text += (
-                "\n\n\U0001f3b6 *Audio tip:* The voice you selected isn't generating audio. "
-                "Use /voice to try a different one."
+            await update.message.reply_text(
+                "\U0001f3b6 *Audio tip:* The voice you selected isn't generating audio. "
+                "Use /voice to try a different one.",
+                parse_mode="Markdown",
             )
-
-        await update.message.reply_text(
-            display_text,
-            reply_markup=conversation_buttons(expanded=False),
-        )

@@ -153,28 +153,22 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             logger.info("Deepgram Aura falhou, usando ElevenLabs fallback (text msg)")
             audio_bytes = await elevenlabs.generate_speech(display_text)
 
+        await update.message.reply_text(
+            display_text,
+            reply_markup=conversation_buttons(expanded=False),
+        )
+
         if audio_bytes:
-            context.user_data["has_audio"] = True
             await update.message.reply_voice(voice=audio_bytes)
-            await update.message.reply_text(
-                display_text,
-                reply_markup=conversation_buttons(expanded=False, has_audio=True),
-            )
         else:
             # Se usuario escolheu Deepgram e falhou, avisa brevemente
             voice_id = context.user_data.get("voice_id", DG_DEFAULT_VOICE_ID)
             if voice_id != DG_DEFAULT_VOICE_ID:
-                audio_note = (
-                    "\n\n\U0001f3b6 *Audio tip:* The voice you selected isn't generating audio. "
-                    "Use /voice to try a different one."
+                await update.message.reply_text(
+                    "\U0001f3b6 *Audio tip:* The voice you selected isn't generating audio. "
+                    "Use /voice to try a different one.",
+                    parse_mode="Markdown",
                 )
-            else:
-                audio_note = ""
-
-            await update.message.reply_text(
-                display_text + audio_note,
-                reply_markup=conversation_buttons(expanded=False),
-            )
     else:
         await update.message.reply_text(
             "Sorry, I'm having trouble thinking right now. "
