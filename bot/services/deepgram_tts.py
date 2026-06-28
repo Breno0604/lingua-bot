@@ -106,11 +106,11 @@ class DeepgramTTSService:
         """Tenta gerar audio com Deepgram Aura."""
         try:
             client = self._get_client()
+            # Nota: encoding="mp3" NAO aceita parametro container
             chunks = client.speak.v1.audio.generate(
                 text=text,
                 model=voice_id,
                 encoding="mp3",
-                container="none",
             )
 
             audio_bytes = b"".join(chunks)
