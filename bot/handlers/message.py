@@ -153,10 +153,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             logger.info("Deepgram Aura falhou, usando ElevenLabs fallback (text msg)")
             audio_bytes = await elevenlabs.generate_speech(display_text)
 
-        await update.message.reply_text(
-            display_text,
-            reply_markup=conversation_buttons(expanded=False),
-        )
+        # 7. Envia texto imediatamente — SEM botoes
+        # Os botoes serao adicionados apos o audio via edit_reply_markup
+        text_msg = await update.message.reply_text(display_text)
 
         if audio_bytes:
             await update.message.reply_voice(voice=audio_bytes)
@@ -169,6 +168,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                     "Use /voice to try a different one.",
                     parse_mode="Markdown",
                 )
+
+        # 8. Adiciona botoes ao texto agora que o audio foi enviado
+        await text_msg.edit_reply_markup(
+            reply_markup=conversation_buttons(expanded=False),
+        )
     else:
         await update.message.reply_text(
             "Sorry, I'm having trouble thinking right now. "

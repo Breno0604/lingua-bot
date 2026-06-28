@@ -91,6 +91,10 @@ def audio_update(mock_update, mock_voice):
     mock_update.message.voice = mock_voice
     mock_update.message.audio = None
     mock_update.message.reply_voice = AsyncMock()
+    # reply_text retorna um mock com edit_reply_markup (usado para adicionar botoes apos o audio)
+    text_msg = MagicMock()
+    text_msg.edit_reply_markup = AsyncMock()
+    mock_update.message.reply_text.return_value = text_msg
     return mock_update
 
 
@@ -304,8 +308,8 @@ class TestTextBeforeAudio:
         )
 
     @pytest.mark.asyncio
-    async def test_response_text_has_conversation_buttons(self, active_conversation):
-        """A mensagem de texto da resposta inclui os botoes de conversa."""
+    async def test_text_sent_without_buttons_initially(self, active_conversation):
+        """O texto e enviado SEM botoes inicialmente."""
         update, context = active_conversation
 
         await handle_audio(update, context)
@@ -318,7 +322,25 @@ class TestTextBeforeAudio:
         ]
         assert len(text_calls) >= 1
         kwargs = text_calls[0].kwargs
-        assert "reply_markup" in kwargs, "Resposta deve ter reply_markup"
+        # reply_text nao deve ter reply_markup — os botoes sao adicionados depois
+        assert "reply_markup" not in kwargs, (
+            "Texto inicial nao deve ter botoes — eles sao adicionados via edit_reply_markup"
+        )
+
+    @pytest.mark.asyncio
+    async def test_buttons_added_via_edit_after_audio(self, active_conversation):
+        """Os botoes sao adicionados ao texto via edit_reply_markup APOS o audio."""
+        update, context = active_conversation
+
+        await handle_audio(update, context)
+
+        # Obtem o mock da mensagem de texto retornada por reply_text
+        text_msg = update.message.reply_text.return_value
+
+        # Verifica que edit_reply_markup foi chamado com os botoes
+        text_msg.edit_reply_markup.assert_called_once()
+        call_kwargs = text_msg.edit_reply_markup.call_args.kwargs
+        assert "reply_markup" in call_kwargs
 
     @pytest.mark.asyncio
     async def test_voice_sent_separately_after_text(self, active_conversation):
@@ -392,6 +414,9 @@ class TestTTSFlow:
 
         # Nao deve enviar audio
         audio_update.message.reply_voice.assert_not_called()
+        # Mas os botoes ainda devem ser adicionados ao texto
+        text_msg = audio_update.message.reply_text.return_value
+        text_msg.edit_reply_markup.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_audio_tip_when_custom_voice_fails(self, audio_update, configured_audio_context):
@@ -421,6 +446,9 @@ class TestTTSFlow:
         tip_text = tip_calls[0][0][0]
         assert "voice you selected" in tip_text.lower()
         assert "/voice" in tip_text
+        # Os botoes ainda devem ser adicionados ao texto original
+        text_msg = audio_update.message.reply_text.return_value
+        text_msg.edit_reply_markup.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_no_audio_tip_when_default_voice(self, audio_update, configured_audio_context):

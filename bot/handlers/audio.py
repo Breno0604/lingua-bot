@@ -138,11 +138,9 @@ async def handle_audio(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
     display_text = clean_reply if clean_reply else reply
 
-    # 7. Envia texto imediatamente (antes do audio)
-    await update.message.reply_text(
-        display_text,
-        reply_markup=conversation_buttons(expanded=False),
-    )
+    # 7. Envia texto imediatamente (antes do audio) — SEM botoes
+    # Os botoes serao adicionados apos o audio via edit_reply_markup
+    text_msg = await update.message.reply_text(display_text)
 
     # 8. Gera audio da resposta
     # Primario: Deepgram Aura | Fallback: ElevenLabs Rachel
@@ -167,3 +165,8 @@ async def handle_audio(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
                 "Use /voice to try a different one.",
                 parse_mode="Markdown",
             )
+
+    # 9. Adiciona botoes ao texto agora que o audio foi enviado
+    await text_msg.edit_reply_markup(
+        reply_markup=conversation_buttons(expanded=False),
+    )
