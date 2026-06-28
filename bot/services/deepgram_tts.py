@@ -12,6 +12,7 @@ Fluxo:
 """
 
 import logging
+import re
 from typing import Optional
 
 from deepgram import DeepgramClient
@@ -19,6 +20,26 @@ from deepgram import DeepgramClient
 from bot.audio_cache import AudioCache
 
 logger = logging.getLogger(__name__)
+
+# Padrao para remover emojis do texto antes de enviar para TTS
+# Deepgram Aura e ElevenLabs tentam pronunciar emojis (ex: "\U0001f44d" -> "thumbs up")
+EMOJI_PATTERN = re.compile(
+    "["
+    "\U0001F600-\U0001F64F"  # Emoticons
+    "\U0001F300-\U0001F5FF"  # Simbolos e pictogramas
+    "\U0001F680-\U0001F6FF"  # Transporte e mapas
+    "\U0001F1E0-\U0001F1FF"  # Bandeiras (iOS)
+    "\U00002702-\U000027B0"  # Dingbats
+    "\U000024C2-\U0001F251"
+    "\U0001F900-\U0001F9FF"  # Símbolos suplementares
+    "\U0001FA00-\U0001FA6F"  # Símbolos de xadrez
+    "\U0001FA70-\U0001FAFF"  # Símbolos diversos
+    "\U00002600-\U000026FF"  # Miscelânea
+    "\U0000FE00-\U0000FE0F"  # Variation selectors
+    "\U0000200D"             # Zero-width joiner
+    "]+",
+    flags=re.UNICODE,
+)
 
 # ──────────────────────────────────────────────
 # Vozes Deepgram Aura
@@ -58,6 +79,10 @@ class DeepgramTTSService:
             self._client = DeepgramClient(api_key=self.api_key)
         return self._client
 
+    def _clean_text(self, text: str) -> str:
+        """Remove emojis e caracteres especiais que TTS tentaria pronunciar."""
+        return EMOJI_PATTERN.sub("", text).strip()
+
     def _truncate_text(self, text: str, max_chars: int = 150) -> str:
         """Trunca o texto mantendo a frase completa."""
         if len(text) <= max_chars:
@@ -84,10 +109,15 @@ class DeepgramTTSService:
         Returns:
             Bytes do audio (MP3), ou None se falhou.
         """
-        # 1. Trunca texto
-        truncated = self._truncate_text(text, max_chars=self.max_text_chars)
+        # 1. Limpa emojis do texto (Deepgram tentaria pronuncia-los)
+        cleaned = self._clean_text(text)
+        if not cleaned:
+            return None
 
-        # 2. Verifica cache
+        # 2. Trunca texto
+        truncated = self._truncate_text(cleaned, max_chars=self.max_text_chars)
+
+        # 3. Verifica cache
         cache_key = f"dg:{voice_id}:{truncated}"
         cached = self.cache.get(cache_key)
         if cached is not None:
