@@ -69,7 +69,7 @@ def conversation_buttons(expanded: bool = False) -> InlineKeyboardMarkup:
             [HIDE_BUTTON],
         ]
         return InlineKeyboardMarkup(keyboard)
-    return InlineKeyboardMarkup([[MORE_BUTTON], [CONFIG_BUTTON]])
+    return InlineKeyboardMarkup([[MORE_BUTTON, CONFIG_BUTTON]])
 
 
 def vocab_pagination(page: int, total_pages: int, expanded: bool = False) -> InlineKeyboardMarkup:
@@ -123,18 +123,9 @@ def topics_menu(expanded: bool = False) -> InlineKeyboardMarkup:
 
 def level_selection_keyboard(current_level: str = "A1") -> InlineKeyboardMarkup:
     """Botoes para escolha de nivel de ingles. SEM compressao — sempre visivel."""
-    VALID_LEVELS = ["A1", "A2", "B1"]
-    LEVEL_LABELS = {
-        "A1": "A1 - Iniciante",
-        "A2": "A2 - B\u00e1sico",
-        "B1": "B1 - Intermedi\u00e1rio",
-    }
-
     row = []
-    for level in VALID_LEVELS:
-        label = LEVEL_LABELS[level]
-        if level == current_level:
-            label = f"\u2705 {label}"
+    for level in ["A1", "A2", "B1"]:
+        label = f"\u2705 {level}" if level == current_level else level
         row.append(InlineKeyboardButton(label, callback_data=f"set_level_{level}"))
     return InlineKeyboardMarkup([row])
 
@@ -142,17 +133,16 @@ def level_selection_keyboard(current_level: str = "A1") -> InlineKeyboardMarkup:
 def voice_selection_keyboard(current_voice_id: str, current_speed: float = 1.0) -> InlineKeyboardMarkup:
     """Botoes para escolha de voz (Deepgram Aura) + velocidade."""
     VOICES = [
-        ("aura-2-thalia-en", "Thalia", "Feminine, clear, confident, energetic"),
-        ("aura-2-odysseus-en", "Odysseus", "Masculine, calm, smooth, professional"),
-        ("aura-2-helena-en", "Helena", "Feminine, caring, natural, friendly"),
-        ("aura-2-mars-en", "Mars", "Masculine, smooth, patient, trustworthy, baritone"),
+        ("aura-2-thalia-en", "Thalia"),
+        ("aura-2-odysseus-en", "Odysseus"),
+        ("aura-2-helena-en", "Helena"),
+        ("aura-2-mars-en", "Mars"),
     ]
 
     keyboard = []
-    # Vozes em pares (2 por linha)
     for i in range(0, len(VOICES), 2):
         row = []
-        for vid, name, desc in VOICES[i:i+2]:
+        for vid, name in VOICES[i:i+2]:
             label = f"\U0001f50a {name}" if vid == current_voice_id else f"{name}"
             row.append(InlineKeyboardButton(label, callback_data=f"set_voice_{vid}"))
         keyboard.append(row)
@@ -220,18 +210,9 @@ def speed_picker_keyboard(current_speed: float = 1.0) -> InlineKeyboardMarkup:
 
 def level_picker_keyboard(current_level: str = "A1") -> InlineKeyboardMarkup:
     """Botoes para escolha de nivel (dentro do config)."""
-    VALID_LEVELS = ["A1", "A2", "B1"]
-    LEVEL_LABELS = {
-        "A1": "A1 - Iniciante",
-        "A2": "A2 - B\u00e1sico",
-        "B1": "B1 - Intermedi\u00e1rio",
-    }
-
     row = []
-    for level in VALID_LEVELS:
-        label = LEVEL_LABELS[level]
-        if level == current_level:
-            label = f"\u2705 {label}"
+    for level in ["A1", "A2", "B1"]:
+        label = f"\u2705 {level}" if level == current_level else level
         row.append(InlineKeyboardButton(label, callback_data=f"set_level_{level}"))
     return InlineKeyboardMarkup([row, [HIDE_BUTTON]])
 
