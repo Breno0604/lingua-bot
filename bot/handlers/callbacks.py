@@ -30,6 +30,7 @@ from bot.utils.keyboards import (
     level_picker_keyboard,
     level_selection_keyboard,
     main_menu,
+    speed_picker_keyboard,
     topic_suggestion,
     topics_menu,
     vocab_pagination,
@@ -77,7 +78,7 @@ async def _expand_options(query, context: ContextTypes.DEFAULT_TYPE) -> None:
     screen_type = context.user_data.get("screen_type", "conversation")
 
     # Estados que ja exibem conteudo completo — nao precisam de expansao
-    if screen_type in ("config_menu", "voice_picker", "level_picker"):
+    if screen_type in ("config_menu", "voice_picker", "speed_picker", "level_picker"):
         return
 
     is_voice = query.message.voice is not None
@@ -128,12 +129,20 @@ async def _show_config_menu(query, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def _show_voice_picker(query, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Exibe o seletor de voz + velocidade (dentro do config)."""
+    """Exibe o seletor de voz (apenas vozes)."""
     voice_id = context.user_data.get("voice_id", DG_DEFAULT_VOICE_ID)
-    speed = context.user_data.get("tts_speed", 1.0)
     _set_screen_type(context, "voice_picker")
     await query.edit_message_reply_markup(
-        reply_markup=voice_picker_keyboard(voice_id, speed)
+        reply_markup=voice_picker_keyboard(voice_id)
+    )
+
+
+async def _show_speed_picker(query, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Exibe o seletor de velocidade (apenas velocidades)."""
+    speed = context.user_data.get("tts_speed", 1.0)
+    _set_screen_type(context, "speed_picker")
+    await query.edit_message_reply_markup(
+        reply_markup=speed_picker_keyboard(speed)
     )
 
 
@@ -182,6 +191,8 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         await _show_config_menu(query, context)
     elif data == "show_voice_picker":
         await _show_voice_picker(query, context)
+    elif data == "show_speed_picker":
+        await _show_speed_picker(query, context)
     elif data == "show_level_picker":
         await _show_level_picker(query, context)
 
@@ -266,7 +277,19 @@ async def _set_level(query, context: ContextTypes.DEFAULT_TYPE, level: str) -> N
     )
 
     # Se veio do config flow, volta ao estado comprimido
-    if context.user_data.get("screen_type") == "level_picker":
+    is_voice = query.message.voice is not None
+    from_config = context.user_data.get("screen_type") == "level_picker"
+
+    if is_voice:
+        if from_config:
+            _set_screen_type(context, "conversation")
+        reply_markup = conversation_buttons(expanded=False) if from_config else main_menu()
+        await query.message.reply_text(
+            text,
+            reply_markup=reply_markup,
+            parse_mode="Markdown",
+        )
+    elif from_config:
         _set_screen_type(context, "conversation")
         await query.edit_message_text(
             text,
@@ -318,7 +341,20 @@ async def _set_voice(query, context: ContextTypes.DEFAULT_TYPE, voice_id: str) -
     )
 
     # Se veio do config flow, volta ao estado comprimido
-    if context.user_data.get("screen_type") == "voice_picker":
+    is_voice = query.message.voice is not None
+    from_config = context.user_data.get("screen_type") == "voice_picker"
+
+    if is_voice:
+        # Nao edita mensagem de voz — envia nova mensagem
+        if from_config:
+            _set_screen_type(context, "conversation")
+        reply_markup = conversation_buttons(expanded=False) if from_config else back_to_menu_button()
+        await query.message.reply_text(
+            text,
+            reply_markup=reply_markup,
+            parse_mode="Markdown",
+        )
+    elif from_config:
         _set_screen_type(context, "conversation")
         await query.edit_message_text(
             text,
@@ -353,11 +389,17 @@ async def _set_speed(query, context: ContextTypes.DEFAULT_TYPE, speed: float) ->
         1.25: "\U0001f407 Very fast",
     }
 
-    # Se veio do config flow, apenas atualiza o teclado (permanece no voice_picker)
-    if context.user_data.get("screen_type") == "voice_picker":
+    # Se veio do config flow, apenas atualiza o teclado (permanece no speed_picker)
+    screen_type = context.user_data.get("screen_type")
+    if screen_type == "speed_picker":
+        await query.edit_message_reply_markup(
+            reply_markup=speed_picker_keyboard(speed)
+        )
+    elif screen_type == "voice_picker":
+        # Caso legacy: veio do voice_picker antigo com velocidades
         voice_id = context.user_data.get("voice_id", DG_DEFAULT_VOICE_ID)
         await query.edit_message_reply_markup(
-            reply_markup=voice_picker_keyboard(voice_id, speed)
+            reply_markup=voice_picker_keyboard(voice_id)
         )
     else:
         text = (

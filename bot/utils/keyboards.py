@@ -168,10 +168,11 @@ def voice_selection_keyboard(current_voice_id: str, current_speed: float = 1.0) 
 
 
 def config_menu_keyboard() -> InlineKeyboardMarkup:
-    """Botoes do menu de configuracao: Voice e Level."""
+    """Botoes do menu de configuracao: Voice, Speed, Level."""
     keyboard = [
         [
             InlineKeyboardButton("\U0001f3a4 Voice", callback_data="show_voice_picker"),
+            InlineKeyboardButton("\u26a1 Speed", callback_data="show_speed_picker"),
             InlineKeyboardButton("\U0001f4ca Level", callback_data="show_level_picker"),
         ],
         [HIDE_BUTTON],
@@ -179,8 +180,8 @@ def config_menu_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(keyboard)
 
 
-def voice_picker_keyboard(current_voice_id: str, current_speed: float = 1.0) -> InlineKeyboardMarkup:
-    """Botoes para escolha de voz + velocidade (dentro do config)."""
+def voice_picker_keyboard(current_voice_id: str) -> InlineKeyboardMarkup:
+    """Botoes para escolha de voz (apenas vozes, sem velocidade)."""
     from bot.services.deepgram_tts import VOICES
 
     keyboard = []
@@ -188,6 +189,13 @@ def voice_picker_keyboard(current_voice_id: str, current_speed: float = 1.0) -> 
         label = f"\U0001f50a {name}" if vid == current_voice_id else f"{name}"
         keyboard.append([InlineKeyboardButton(label, callback_data=f"set_voice_{vid}")])
 
+    keyboard.append([HIDE_BUTTON])
+    return InlineKeyboardMarkup(keyboard)
+
+
+def speed_picker_keyboard(current_speed: float = 1.0) -> InlineKeyboardMarkup:
+    """Botoes para escolha de velocidade (apenas velocidades)."""
+    keyboard = []
     speed_row = []
     for speed_val in SPEED_OPTIONS:
         emoji = "\U0001f422 " if speed_val == 0.75 else ("\U0001f407 " if speed_val == 1.25 else "")
