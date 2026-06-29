@@ -23,10 +23,14 @@ DEFAULT_SPEED_BY_LEVEL = {
     "B1": 1.0,
 }
 
+def _pad(text: str) -> str:
+    """Adiciona 5 espacos nas bordas para aumentar a largura do botao."""
+    return f"     {text}     "
+
 # Botoes de controle de compressao
-MORE_BUTTON = InlineKeyboardButton("\u2795 More Options", callback_data="show_more_options")
-CONFIG_BUTTON = InlineKeyboardButton("\u2699\ufe0f Configuration", callback_data="show_config")
-HIDE_BUTTON = InlineKeyboardButton("\u25c0 Hide Options", callback_data="hide_options")
+MORE_BUTTON = InlineKeyboardButton(_pad("\u2795 More Options"), callback_data="show_more_options")
+CONFIG_BUTTON = InlineKeyboardButton(_pad("\u2699\ufe0f Configuration"), callback_data="show_config")
+HIDE_BUTTON = InlineKeyboardButton(_pad("\u25c0 Hide Options"), callback_data="hide_options")
 
 
 def collapse_keyboard(
@@ -46,12 +50,12 @@ def main_menu(expanded: bool = False) -> InlineKeyboardMarkup:
     """Menu principal exibido no /start."""
     keyboard = [
         [
-            InlineKeyboardButton("\U0001f4ac Start a Conversation", callback_data="start_conversation"),
-            InlineKeyboardButton("\u2753 How it Works", callback_data="how_it_works"),
+            InlineKeyboardButton(_pad("\U0001f4ac Start a Conversation"), callback_data="start_conversation"),
+            InlineKeyboardButton(_pad("\u2753 How it Works"), callback_data="how_it_works"),
         ],
         [
-            InlineKeyboardButton("\U0001f4da My Vocabulary", callback_data="show_vocab"),
-            InlineKeyboardButton("\U0001f3af Practice Topics", callback_data="show_topics"),
+            InlineKeyboardButton(_pad("\U0001f4da My Vocabulary"), callback_data="show_vocab"),
+            InlineKeyboardButton(_pad("\U0001f3af Practice Topics"), callback_data="show_topics"),
         ],
     ]
     return collapse_keyboard(keyboard, expanded=expanded)
@@ -62,9 +66,9 @@ def conversation_buttons(expanded: bool = False) -> InlineKeyboardMarkup:
     if expanded:
         keyboard = [
             [
-                InlineKeyboardButton("\U0001f4dd Example", callback_data="more_examples"),
-                InlineKeyboardButton("\U0001f4d6 Explain", callback_data="explain_word"),
-                InlineKeyboardButton("\U0001f3af Practice", callback_data="practice_this"),
+                InlineKeyboardButton(_pad("\U0001f4dd Example"), callback_data="more_examples"),
+                InlineKeyboardButton(_pad("\U0001f4d6 Explain"), callback_data="explain_word"),
+                InlineKeyboardButton(_pad("\U0001f3af Practice"), callback_data="practice_this"),
             ],
             [HIDE_BUTTON],
         ]
@@ -78,14 +82,14 @@ def vocab_pagination(page: int, total_pages: int, expanded: bool = False) -> Inl
 
     nav_row = []
     if page > 1:
-        nav_row.append(InlineKeyboardButton("\u25c0\ufe0f Previous", callback_data=f"vocab_page_{page - 1}"))
+        nav_row.append(InlineKeyboardButton(_pad("\u25c0\ufe0f Previous"), callback_data=f"vocab_page_{page - 1}"))
     if page < total_pages:
-        nav_row.append(InlineKeyboardButton("Next \u25b6\ufe0f", callback_data=f"vocab_page_{page + 1}"))
+        nav_row.append(InlineKeyboardButton(_pad("Next \u25b6\ufe0f"), callback_data=f"vocab_page_{page + 1}"))
 
     if nav_row:
         keyboard.append(nav_row)
 
-    keyboard.append([InlineKeyboardButton("\U0001f519 Back to Menu", callback_data="back_to_menu")])
+    keyboard.append([InlineKeyboardButton(_pad("\U0001f519 Back to Menu"), callback_data="back_to_menu")])
     return collapse_keyboard(keyboard, expanded=expanded)
 
 
@@ -93,10 +97,10 @@ def topic_suggestion(topic: str) -> InlineKeyboardMarkup:
     """Botoes apos sugestao de topico. SEM compressao — sempre visivel."""
     keyboard = [
         [
-            InlineKeyboardButton("\u2705 Yes, let's talk!", callback_data=f"start_topic_{topic}"),
-            InlineKeyboardButton("\U0001f504 Another Topic", callback_data="show_topics"),
+            InlineKeyboardButton(_pad("\u2705 Yes, let's talk!"), callback_data=f"start_topic_{topic}"),
+            InlineKeyboardButton(_pad("\U0001f504 Another Topic"), callback_data="show_topics"),
         ],
-        [InlineKeyboardButton("\U0001f519 Back to Menu", callback_data="back_to_menu")],
+        [InlineKeyboardButton(_pad("\U0001f519 Back to Menu"), callback_data="back_to_menu")],
     ]
     return InlineKeyboardMarkup(keyboard)
 
@@ -105,18 +109,18 @@ def topics_menu(expanded: bool = False) -> InlineKeyboardMarkup:
     """Menu com a lista de topicos disponiveis (primeiros 5)."""
     keyboard = [
         [
-            InlineKeyboardButton("\U0001f44b Greetings", callback_data="start_topic_Greetings"),
-            InlineKeyboardButton("\U0001f354 Food & Drinks", callback_data="start_topic_Food & Drinks"),
+            InlineKeyboardButton(_pad("\U0001f44b Greetings"), callback_data="start_topic_Greetings"),
+            InlineKeyboardButton(_pad("\U0001f354 Food & Drinks"), callback_data="start_topic_Food & Drinks"),
         ],
         [
-            InlineKeyboardButton("\U0001f468\u200d\U0001f469\u200d\U0001f467\u200d\U0001f466 Family", callback_data="start_topic_Family"),
-            InlineKeyboardButton("\u26c5 Weather", callback_data="start_topic_Weather"),
+            InlineKeyboardButton(_pad("\U0001f468\u200d\U0001f469\u200d\U0001f467\u200d\U0001f466 Family"), callback_data="start_topic_Family"),
+            InlineKeyboardButton(_pad("\u26c5 Weather"), callback_data="start_topic_Weather"),
         ],
         [
-            InlineKeyboardButton("\U0001f4c5 Daily Routine", callback_data="start_topic_Daily Routine"),
-            InlineKeyboardButton("\U0001f3b2 Random Topic", callback_data="show_topics"),
+            InlineKeyboardButton(_pad("\U0001f4c5 Daily Routine"), callback_data="start_topic_Daily Routine"),
+            InlineKeyboardButton(_pad("\U0001f3b2 Random Topic"), callback_data="show_topics"),
         ],
-        [InlineKeyboardButton("\U0001f519 Back to Menu", callback_data="back_to_menu")],
+        [InlineKeyboardButton(_pad("\U0001f519 Back to Menu"), callback_data="back_to_menu")],
     ]
     return collapse_keyboard(keyboard, expanded=expanded)
 
@@ -125,7 +129,7 @@ def level_selection_keyboard(current_level: str = "A1") -> InlineKeyboardMarkup:
     """Botoes para escolha de nivel de ingles. SEM compressao — sempre visivel."""
     row = []
     for level in ["A1", "A2", "B1"]:
-        label = f"\u2705 {level}" if level == current_level else level
+        label = _pad(f"\u2705 {level}" if level == current_level else level)
         row.append(InlineKeyboardButton(label, callback_data=f"set_level_{level}"))
     return InlineKeyboardMarkup([row])
 
@@ -143,7 +147,7 @@ def voice_selection_keyboard(current_voice_id: str, current_speed: float = 1.0) 
     for i in range(0, len(VOICES), 2):
         row = []
         for vid, name in VOICES[i:i+2]:
-            label = f"\U0001f50a {name}" if vid == current_voice_id else f"{name}"
+            label = _pad(f"\U0001f50a {name}" if vid == current_voice_id else name)
             row.append(InlineKeyboardButton(label, callback_data=f"set_voice_{vid}"))
         keyboard.append(row)
 
@@ -159,7 +163,7 @@ def voice_selection_keyboard(current_voice_id: str, current_speed: float = 1.0) 
         speed_row.append(InlineKeyboardButton(label, callback_data=f"set_speed_{speed_val}"))
     keyboard.append(speed_row)
 
-    keyboard.append([InlineKeyboardButton("\U0001f519 Back to Menu", callback_data="back_to_menu")])
+    keyboard.append([InlineKeyboardButton(_pad("\U0001f519 Back to Menu"), callback_data="back_to_menu")])
     return InlineKeyboardMarkup(keyboard)
 
 
@@ -167,9 +171,9 @@ def config_menu_keyboard() -> InlineKeyboardMarkup:
     """Botoes do menu de configuracao: Voice, Speed, Level."""
     keyboard = [
         [
-            InlineKeyboardButton("\U0001f3a4 Voice", callback_data="show_voice_picker"),
-            InlineKeyboardButton("\u26a1 Speed", callback_data="show_speed_picker"),
-            InlineKeyboardButton("\U0001f4ca Level", callback_data="show_level_picker"),
+            InlineKeyboardButton(_pad("\U0001f3a4 Voice"), callback_data="show_voice_picker"),
+            InlineKeyboardButton(_pad("\u26a1 Speed"), callback_data="show_speed_picker"),
+            InlineKeyboardButton(_pad("\U0001f4ca Level"), callback_data="show_level_picker"),
         ],
         [HIDE_BUTTON],
     ]
@@ -189,7 +193,7 @@ def voice_picker_keyboard(current_voice_id: str) -> InlineKeyboardMarkup:
     for i in range(0, len(VOICES), 2):
         row = []
         for vid, name in VOICES[i:i+2]:
-            label = f"\U0001f50a {name}" if vid == current_voice_id else f"{name}"
+            label = _pad(f"\U0001f50a {name}" if vid == current_voice_id else name)
             row.append(InlineKeyboardButton(label, callback_data=f"set_voice_{vid}"))
         keyboard.append(row)
 
@@ -212,7 +216,7 @@ def level_picker_keyboard(current_level: str = "A1") -> InlineKeyboardMarkup:
     """Botoes para escolha de nivel (dentro do config)."""
     row = []
     for level in ["A1", "A2", "B1"]:
-        label = f"\u2705 {level}" if level == current_level else level
+        label = _pad(f"\u2705 {level}" if level == current_level else level)
         row.append(InlineKeyboardButton(label, callback_data=f"set_level_{level}"))
     return InlineKeyboardMarkup([row, [HIDE_BUTTON]])
 
@@ -235,5 +239,5 @@ async def cleanup_old_buttons(context, chat_id: int) -> None:
 
 def back_to_menu_button() -> InlineKeyboardMarkup:
     """Botao simples de voltar ao menu. SEM compressao — ja e um unico botao."""
-    keyboard = [[InlineKeyboardButton("\U0001f519 Back to Menu", callback_data="back_to_menu")]]
+    keyboard = [[InlineKeyboardButton(_pad("\U0001f519 Back to Menu"), callback_data="back_to_menu")]]
     return InlineKeyboardMarkup(keyboard)
