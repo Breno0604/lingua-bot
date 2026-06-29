@@ -61,15 +61,13 @@ def conversation_buttons(expanded: bool = False) -> InlineKeyboardMarkup:
     """Botoes exibidos apos cada resposta do bot."""
     if expanded:
         keyboard = [
-            [
-                InlineKeyboardButton("\U0001f4dd Example", callback_data="more_examples"),
-                InlineKeyboardButton("\U0001f4d6 Explain", callback_data="explain_word"),
-                InlineKeyboardButton("\U0001f3af Practice", callback_data="practice_this"),
-            ],
+            [InlineKeyboardButton("\U0001f4dd Example", callback_data="more_examples")],
+            [InlineKeyboardButton("\U0001f4d6 Explain", callback_data="explain_word")],
+            [InlineKeyboardButton("\U0001f3af Practice", callback_data="practice_this")],
             [HIDE_BUTTON],
         ]
         return InlineKeyboardMarkup(keyboard)
-    return InlineKeyboardMarkup([[MORE_BUTTON, CONFIG_BUTTON]])
+    return InlineKeyboardMarkup([[MORE_BUTTON], [CONFIG_BUTTON]])
 
 
 def vocab_pagination(page: int, total_pages: int, expanded: bool = False) -> InlineKeyboardMarkup:
@@ -170,11 +168,9 @@ def voice_selection_keyboard(current_voice_id: str, current_speed: float = 1.0) 
 def config_menu_keyboard() -> InlineKeyboardMarkup:
     """Botoes do menu de configuracao: Voice, Speed, Level."""
     keyboard = [
-        [
-            InlineKeyboardButton("\U0001f3a4 Voice", callback_data="show_voice_picker"),
-            InlineKeyboardButton("\u26a1 Speed", callback_data="show_speed_picker"),
-            InlineKeyboardButton("\U0001f4ca Level", callback_data="show_level_picker"),
-        ],
+        [InlineKeyboardButton("\U0001f3a4 Voice", callback_data="show_voice_picker")],
+        [InlineKeyboardButton("\u26a1 Speed", callback_data="show_speed_picker")],
+        [InlineKeyboardButton("\U0001f4ca Level", callback_data="show_level_picker")],
         [HIDE_BUTTON],
     ]
     return InlineKeyboardMarkup(keyboard)
@@ -194,14 +190,12 @@ def voice_picker_keyboard(current_voice_id: str) -> InlineKeyboardMarkup:
 
 
 def speed_picker_keyboard(current_speed: float = 1.0) -> InlineKeyboardMarkup:
-    """Botoes para escolha de velocidade (apenas velocidades)."""
+    """Botoes para escolha de velocidade."""
     keyboard = []
-    speed_row = []
     for speed_val in SPEED_OPTIONS:
         emoji = "\U0001f422 " if speed_val == 0.75 else ("\U0001f407 " if speed_val == 1.25 else "")
         marker = " \u25cf" if speed_val == current_speed else ""
-        speed_row.append(InlineKeyboardButton(f"{emoji}{speed_val}x{marker}", callback_data=f"set_speed_{speed_val}"))
-    keyboard.append(speed_row)
+        keyboard.append([InlineKeyboardButton(f"{emoji}{speed_val}x{marker}", callback_data=f"set_speed_{speed_val}")])
 
     keyboard.append([HIDE_BUTTON])
     return InlineKeyboardMarkup(keyboard)
