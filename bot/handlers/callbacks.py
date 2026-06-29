@@ -25,12 +25,15 @@ from bot.utils.formatting import TOPICS, format_topic_suggestion, get_random_top
 from bot.utils.keyboards import (
     DEFAULT_SPEED_BY_LEVEL,
     back_to_menu_button,
+    config_menu_keyboard,
     conversation_buttons,
+    level_picker_keyboard,
     level_selection_keyboard,
     main_menu,
     topic_suggestion,
     topics_menu,
     vocab_pagination,
+    voice_picker_keyboard,
 )
 
 logger = logging.getLogger(__name__)
@@ -71,17 +74,21 @@ async def _expand_options(query, context: ContextTypes.DEFAULT_TYPE) -> None:
     mensagem de voz. Para mensagens de texto, mantem o comportamento
     original com animacao de loading.
     """
+    screen_type = context.user_data.get("screen_type", "conversation")
+
+    # Estados que ja exibem conteudo completo — nao precisam de expansao
+    if screen_type in ("config_menu", "voice_picker", "level_picker"):
+        return
+
     is_voice = query.message.voice is not None
     expanded_keyboard = _get_keyboard_for_screen(context, expanded=True)
 
     if is_voice:
-        # Botoes estao na mensagem de voz: editar apenas o reply_markup
         try:
             await query.edit_message_reply_markup(reply_markup=expanded_keyboard)
         except Exception as exc:
             logger.error("Falha ao expandir botoes no audio: %s", exc)
     else:
-        # Botoes estao na mensagem de texto: fluxo normal com animacao
         original_text = query.message.text or ""
         try:
             await query.edit_message_text(
@@ -103,9 +110,42 @@ async def _expand_options(query, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def _collapse_options(query, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Recolhe os botoes: substitui botoes por '+ More Options'."""
-    collapsed_keyboard = _get_keyboard_for_screen(context, expanded=False)
-    await query.edit_message_reply_markup(reply_markup=collapsed_keyboard)
+    """Recolhe os botoes: volta ao estado comprimido inicial."""
+    _set_screen_type(context, "conversation")
+    await query.edit_message_reply_markup(
+        reply_markup=conversation_buttons(expanded=False)
+    )
+
+
+# ──────────────────────────────────────────────
+# Handlers do Menu de Configuracao
+# ──────────────────────────────────────────────
+
+async def _show_config_menu(query, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Exibe o menu de configuracao (Voice / Level)."""
+    _set_screen_type(context, "config_menu")
+    await query.edit_message_reply_markup(reply_markup=config_menu_keyboard())
+
+
+async def _show_voice_picker(query, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Exibe o seletor de voz + velocidade (dentro do config)."""
+    voice_id = context.user_data.get("voice_id", DG_DEFAULT_VOICE_ID)
+    speed = context.user_data.get("tts_speed", 1.0)
+    _set_screen_type(context, "voice_picker")
+    await query.edit_message_reply_markup(
+        reply_markup=voice_picker_keyboard(voice_id, speed)
+    )
+
+
+async def _show_level_picker(query, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Exibe o seletor de nivel (dentro do config)."""
+    user_id = query.from_user.id
+    level_mgr: LevelManager = context.bot_data.get("level_manager")
+    current_level = level_mgr.get_level(user_id) if level_mgr else "A1"
+    _set_screen_type(context, "level_picker")
+    await query.edit_message_reply_markup(
+        reply_markup=level_picker_keyboard(current_level)
+    )
 
 
 # ──────────────────────────────────────────────
@@ -136,6 +176,14 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         await _expand_options(query, context)
     elif data == "hide_options":
         await _collapse_options(query, context)
+
+    # Menu de configuracao
+    elif data == "show_config":
+        await _show_config_menu(query, context)
+    elif data == "show_voice_picker":
+        await _show_voice_picker(query, context)
+    elif data == "show_level_picker":
+        await _show_level_picker(query, context)
 
     # Botoes de conversa
     elif data == "more_examples":
@@ -217,11 +265,20 @@ async def _set_level(query, context: ContextTypes.DEFAULT_TYPE, level: str) -> N
         "You can change your level anytime with /level"
     )
 
-    await query.edit_message_text(
-        text,
-        reply_markup=main_menu(),
-        parse_mode="Markdown",
-    )
+    # Se veio do config flow, volta ao estado comprimido
+    if context.user_data.get("screen_type") == "level_picker":
+        _set_screen_type(context, "conversation")
+        await query.edit_message_text(
+            text,
+            reply_markup=conversation_buttons(expanded=False),
+            parse_mode="Markdown",
+        )
+    else:
+        await query.edit_message_text(
+            text,
+            reply_markup=main_menu(),
+            parse_mode="Markdown",
+        )
 
 
 async def _set_voice(query, context: ContextTypes.DEFAULT_TYPE, voice_id: str) -> None:
@@ -260,11 +317,20 @@ async def _set_voice(query, context: ContextTypes.DEFAULT_TYPE, voice_id: str) -
         "You can change it anytime with /voice"
     )
 
-    await query.edit_message_text(
-        text,
-        reply_markup=back_to_menu_button(),
-        parse_mode="Markdown",
-    )
+    # Se veio do config flow, volta ao estado comprimido
+    if context.user_data.get("screen_type") == "voice_picker":
+        _set_screen_type(context, "conversation")
+        await query.edit_message_text(
+            text,
+            reply_markup=conversation_buttons(expanded=False),
+            parse_mode="Markdown",
+        )
+    else:
+        await query.edit_message_text(
+            text,
+            reply_markup=back_to_menu_button(),
+            parse_mode="Markdown",
+        )
 
 
 async def _set_speed(query, context: ContextTypes.DEFAULT_TYPE, speed: float) -> None:
@@ -287,18 +353,24 @@ async def _set_speed(query, context: ContextTypes.DEFAULT_TYPE, speed: float) ->
         1.25: "\U0001f407 Very fast",
     }
 
-    text = (
-        f"\u2705 **Speed set to {speed}x!**\n\n"
-        f"{speed_labels.get(speed, '')}\n\n"
-        "I'll use this speed for my audio responses. "
-        "You can change it anytime with /voice"
-    )
-
-    await query.edit_message_text(
-        text,
-        reply_markup=back_to_menu_button(),
-        parse_mode="Markdown",
-    )
+    # Se veio do config flow, apenas atualiza o teclado (permanece no voice_picker)
+    if context.user_data.get("screen_type") == "voice_picker":
+        voice_id = context.user_data.get("voice_id", DG_DEFAULT_VOICE_ID)
+        await query.edit_message_reply_markup(
+            reply_markup=voice_picker_keyboard(voice_id, speed)
+        )
+    else:
+        text = (
+            f"\u2705 **Speed set to {speed}x!**\n\n"
+            f"{speed_labels.get(speed, '')}\n\n"
+            "I'll use this speed for my audio responses. "
+            "You can change it anytime with /voice"
+        )
+        await query.edit_message_text(
+            text,
+            reply_markup=back_to_menu_button(),
+            parse_mode="Markdown",
+        )
 
 
 async def _show_menu(query, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -585,21 +657,13 @@ async def _call_groq_for(
     is_voice = query.message.voice is not None
 
     if not groq or not conv_mgr:
-        if is_voice:
-            await query.message.reply_text(
-                "Sorry, I'm not ready yet. Please try /start again! \U0001f64f"
-            )
-        else:
-            await query.edit_message_text(
-                "Sorry, I'm not ready yet. Please try /start again! \U0001f64f"
-            )
+        await query.message.reply_text(
+            "Sorry, I'm not ready yet. Please try /start again! \U0001f64f"
+        )
         return
 
-    # Mostra loading — para voz, envia como nova mensagem
-    if is_voice:
-        loading = await query.message.reply_text(loading_text)
-    else:
-        await query.edit_message_text(loading_text)
+    # Mostra loading como nova mensagem (para todos os tipos)
+    loading = await query.message.reply_text(loading_text)
 
     user_level = level_mgr.get_level(user_id) if level_mgr else "A1"
 
@@ -607,16 +671,10 @@ async def _call_groq_for(
     history = conv.get_formatted_history()
 
     if not history:
-        if is_voice:
-            await query.message.reply_text(
-                "Let's start a conversation first! Type something and I'll help you practice! \U0001f60a",
-                reply_markup=back_to_menu_button(),
-            )
-        else:
-            await query.edit_message_text(
-                "Let's start a conversation first! Type something and I'll help you practice! \U0001f60a",
-                reply_markup=back_to_menu_button(),
-            )
+        await query.message.reply_text(
+            "Let's start a conversation first! Type something and I'll help you practice! \U0001f60a",
+            reply_markup=back_to_menu_button(),
+        )
         return
 
     try:
@@ -631,35 +689,31 @@ async def _call_groq_for(
         conv.add_assistant_message(reply)
         conv.add_user_message(prompt_suffix)
 
-        if is_voice:
-            # Voz: envia resposta como nova mensagem e apaga loading
-            try:
-                await loading.delete()
-            except Exception:
-                pass
-            await query.message.reply_text(
-                reply,
-                reply_markup=conversation_buttons(expanded=expanded),
-            )
-        else:
-            await query.edit_message_text(
-                reply,
-                reply_markup=conversation_buttons(expanded=expanded),
-            )
+        # Remove loading
+        try:
+            await loading.delete()
+        except Exception:
+            pass
+
+        # Sempre envia como nova mensagem (preserva a original)
+        msg = await query.message.reply_text(
+            reply,
+            reply_markup=conversation_buttons(expanded=expanded),
+        )
+
+        # Rastreia o ID para limpeza futura dos botoes
+        button_ids = context.user_data.get("button_msg_ids", [])
+        button_ids.append(msg.message_id)
+        context.user_data["button_msg_ids"] = button_ids
     else:
-        if is_voice:
-            try:
-                await loading.delete()
-            except Exception:
-                pass
-            await query.message.reply_text(
-                "Sorry, I had trouble thinking of something. Let's try again! \U0001f60a",
-                reply_markup=conversation_buttons(expanded=False),
-            )
-        else:
-            await query.edit_message_text(
-                "Sorry, I had trouble thinking of something. Let's try again! \U0001f60a",
-                reply_markup=conversation_buttons(expanded=False),
-            )
+        try:
+            await loading.delete()
+        except Exception:
+            pass
+
+        await query.message.reply_text(
+            "Sorry, I had trouble thinking of something. Let's try again! \U0001f60a",
+            reply_markup=conversation_buttons(expanded=False),
+        )
 
 

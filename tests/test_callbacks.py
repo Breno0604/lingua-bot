@@ -124,25 +124,23 @@ class TestCallbackNavigation:
 
 
 class TestCallbackActions:
-    """Testes para botoes de acao (More Examples, etc)."""
+    """Testes para botoes de acao (Example, Explain, Practice)."""
 
     @pytest.mark.asyncio
     async def test_more_examples_no_history(self, mock_update, configured_context):
-        """more_examples sem historico mostra aviso."""
+        """more_examples sem historico mostra aviso via nova mensagem."""
         mock_update.callback_query.data = "more_examples"
         await handle_callback(mock_update, configured_context)
 
-        mock_update.callback_query.edit_message_text.assert_called()
-        # A primeira chamada e a mensagem de carregamento
-        # A segunda (se nao tiver historico) e o aviso
-        calls = mock_update.callback_query.edit_message_text.call_args_list
+        # Agora usa reply_text (nova mensagem) em vez de edit_message_text
+        mock_update.callback_query.message.reply_text.assert_called()
+        calls = mock_update.callback_query.message.reply_text.call_args_list
         last_text = calls[-1][0][0]
         assert "start a conversation" in last_text.lower()
 
     @pytest.mark.asyncio
     async def test_more_examples_with_history(self, mock_update, configured_context):
-        """more_examples com historico chama Groq."""
-        # Adiciona historico a conversa
+        """more_examples com historico chama Groq e envia nova mensagem."""
         conv = configured_context.bot_data["conversation_mgr"].get_or_create(12345)
         conv.add_user_message("Hello!")
         conv.add_assistant_message("Hi! How are you?")
@@ -150,17 +148,17 @@ class TestCallbackActions:
         mock_update.callback_query.data = "more_examples"
         await handle_callback(mock_update, configured_context)
 
-        # Groq deve ter sido chamado
         configured_context.bot_data["groq"].generate_reply.assert_called_once()
 
-        # A mensagem de carregamento foi mostrada
-        calls = mock_update.callback_query.edit_message_text.call_args_list
+        # A mensagem de carregamento foi enviada como nova mensagem
+        mock_update.callback_query.message.reply_text.assert_called()
+        calls = mock_update.callback_query.message.reply_text.call_args_list
         first_text = calls[0][0][0]
         assert "Generating more examples" in first_text
 
     @pytest.mark.asyncio
     async def test_explain_word_with_history(self, mock_update, configured_context):
-        """explain_word com historico chama Groq."""
+        """explain_word com historico chama Groq e envia nova mensagem."""
         conv = configured_context.bot_data["conversation_mgr"].get_or_create(12345)
         conv.add_user_message("What is 'breakfast'?")
         conv.add_assistant_message("Breakfast is the first meal of the day!")
@@ -170,13 +168,14 @@ class TestCallbackActions:
 
         configured_context.bot_data["groq"].generate_reply.assert_called_once()
 
-        calls = mock_update.callback_query.edit_message_text.call_args_list
+        mock_update.callback_query.message.reply_text.assert_called()
+        calls = mock_update.callback_query.message.reply_text.call_args_list
         first_text = calls[0][0][0]
         assert "Looking up word" in first_text
 
     @pytest.mark.asyncio
     async def test_practice_this_with_history(self, mock_update, configured_context):
-        """practice_this com historico chama Groq."""
+        """practice_this com historico chama Groq e envia nova mensagem."""
         conv = configured_context.bot_data["conversation_mgr"].get_or_create(12345)
         conv.add_user_message("I like dogs")
         conv.add_assistant_message("Great! Dogs are wonderful animals!")
@@ -186,7 +185,8 @@ class TestCallbackActions:
 
         configured_context.bot_data["groq"].generate_reply.assert_called_once()
 
-        calls = mock_update.callback_query.edit_message_text.call_args_list
+        mock_update.callback_query.message.reply_text.assert_called()
+        calls = mock_update.callback_query.message.reply_text.call_args_list
         first_text = calls[0][0][0]
         assert "Creating a practice" in first_text
 

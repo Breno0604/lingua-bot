@@ -19,7 +19,7 @@ from bot.services.groq import GroqService
 from bot.handlers.voice_command import _load_audio_prefs_from_db
 from bot.services.level_manager import LevelManager
 from bot.services.tts_orchestrator import TTSOrchestrator
-from bot.utils.keyboards import DEFAULT_SPEED_BY_LEVEL, conversation_buttons
+from bot.utils.keyboards import DEFAULT_SPEED_BY_LEVEL, cleanup_old_buttons, conversation_buttons
 from bot.utils.rate_limiter import RateLimiter
 
 logger = logging.getLogger(__name__)
@@ -140,6 +140,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
         context.user_data["screen_type"] = "conversation"
 
+        # Remove botoes de mensagens anteriores
+        await cleanup_old_buttons(context, update.effective_chat.id)
+
         # Carrega preferencias do banco (voz, velocidade) se necessario
         await _load_audio_prefs_from_db(context, user_id)
 
@@ -153,11 +156,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
         if audio_bytes:
             # Audio pronto: texto sem botoes + voz com botoes acoplados
-            await update.message.reply_text(display_text)
-            await update.message.reply_voice(
+            text_msg = await update.message.reply_text(display_text)
+            voice_msg = await update.message.reply_voice(
                 voice=audio_bytes,
                 reply_markup=conversation_buttons(expanded=False),
             )
+            # Rastreia apenas a mensagem de voz (tem os botoes)
+            context.user_data.setdefault("button_msg_ids", []).append(voice_msg.message_id)
         else:
             # Sem audio: envia texto com botoes diretamente
             voice_id = context.user_data.get("voice_id", DG_DEFAULT_VOICE_ID)
@@ -166,10 +171,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                     "\n\n\U0001f3b6 *Audio tip:* The voice you selected isn't generating audio. "
                     "Use /voice to try a different one."
                 )
-            await update.message.reply_text(
+            msg = await update.message.reply_text(
                 display_text,
                 reply_markup=conversation_buttons(expanded=False),
             )
+            context.user_data.setdefault("button_msg_ids", []).append(msg.message_id)
     else:
         await update.message.reply_text(
             "Sorry, I'm having trouble thinking right now. "

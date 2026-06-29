@@ -23,7 +23,7 @@ from bot.services.deepgram_tts import DEFAULT_VOICE_ID as DG_DEFAULT_VOICE_ID
 from bot.services.groq import GroqService
 from bot.services.level_manager import LevelManager
 from bot.services.tts_orchestrator import TTSOrchestrator
-from bot.utils.keyboards import DEFAULT_SPEED_BY_LEVEL, conversation_buttons
+from bot.utils.keyboards import DEFAULT_SPEED_BY_LEVEL, cleanup_old_buttons, conversation_buttons
 from bot.handlers.message import _extract_and_clean_reply
 
 logger = logging.getLogger(__name__)
@@ -141,6 +141,9 @@ async def handle_audio(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
     display_text = clean_reply if clean_reply else reply
 
+    # Remove botoes de mensagens anteriores
+    await cleanup_old_buttons(context, update.effective_chat.id)
+
     # 7. Envia texto imediatamente (antes do audio) — SEM botoes
     text_msg = await update.message.reply_text(display_text)
 
@@ -154,10 +157,11 @@ async def handle_audio(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
     if audio_bytes:
         # Audio pronto: envia voz com botoes acoplados
-        await update.message.reply_voice(
+        voice_msg = await update.message.reply_voice(
             voice=audio_bytes,
             reply_markup=conversation_buttons(expanded=False),
         )
+        context.user_data.setdefault("button_msg_ids", []).append(voice_msg.message_id)
     else:
         # Sem audio: adiciona botoes ao texto via edicao
         voice_id = context.user_data.get("voice_id", DG_DEFAULT_VOICE_ID)
@@ -170,3 +174,4 @@ async def handle_audio(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         await text_msg.edit_reply_markup(
             reply_markup=conversation_buttons(expanded=False),
         )
+        context.user_data.setdefault("button_msg_ids", []).append(text_msg.message_id)

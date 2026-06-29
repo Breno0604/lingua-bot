@@ -9,6 +9,8 @@ Todos os teclados agora suportam compressao via collapse_keyboard:
 - expanded=True: mostra todos os botoes + "\u25c0 Hide Options"
 """
 
+import asyncio
+
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
 # Opcoes de velocidade de audio disponiveis
@@ -23,6 +25,7 @@ DEFAULT_SPEED_BY_LEVEL = {
 
 # Botoes de controle de compressao
 MORE_BUTTON = InlineKeyboardButton("\u2795 More Options", callback_data="show_more_options")
+CONFIG_BUTTON = InlineKeyboardButton("\u2699\ufe0f Configuration", callback_data="show_config")
 HIDE_BUTTON = InlineKeyboardButton("\u25c0 Hide Options", callback_data="hide_options")
 
 
@@ -56,16 +59,17 @@ def main_menu(expanded: bool = False) -> InlineKeyboardMarkup:
 
 def conversation_buttons(expanded: bool = False) -> InlineKeyboardMarkup:
     """Botoes exibidos apos cada resposta do bot."""
-    keyboard = [
-        [
-            InlineKeyboardButton("\U0001f4dd More Examples", callback_data="more_examples"),
-            InlineKeyboardButton("\U0001f4d6 Explain This Word", callback_data="explain_word"),
-        ],
-        [
-            InlineKeyboardButton("\U0001f3af Practice This", callback_data="practice_this"),
-        ],
-    ]
-    return collapse_keyboard(keyboard, expanded=expanded)
+    if expanded:
+        keyboard = [
+            [
+                InlineKeyboardButton("\U0001f4dd Example", callback_data="more_examples"),
+                InlineKeyboardButton("\U0001f4d6 Explain", callback_data="explain_word"),
+                InlineKeyboardButton("\U0001f3af Practice", callback_data="practice_this"),
+            ],
+            [HIDE_BUTTON],
+        ]
+        return InlineKeyboardMarkup(keyboard)
+    return InlineKeyboardMarkup([[MORE_BUTTON, CONFIG_BUTTON]])
 
 
 def vocab_pagination(page: int, total_pages: int, expanded: bool = False) -> InlineKeyboardMarkup:
@@ -161,6 +165,68 @@ def voice_selection_keyboard(current_voice_id: str, current_speed: float = 1.0) 
 
     keyboard.append([InlineKeyboardButton("\U0001f519 Back to Menu", callback_data="back_to_menu")])
     return InlineKeyboardMarkup(keyboard)
+
+
+def config_menu_keyboard() -> InlineKeyboardMarkup:
+    """Botoes do menu de configuracao: Voice e Level."""
+    keyboard = [
+        [
+            InlineKeyboardButton("\U0001f3a4 Voice", callback_data="show_voice_picker"),
+            InlineKeyboardButton("\U0001f4ca Level", callback_data="show_level_picker"),
+        ],
+        [HIDE_BUTTON],
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+
+def voice_picker_keyboard(current_voice_id: str, current_speed: float = 1.0) -> InlineKeyboardMarkup:
+    """Botoes para escolha de voz + velocidade (dentro do config)."""
+    from bot.services.deepgram_tts import VOICES
+
+    keyboard = []
+    for vid, name, desc in VOICES:
+        label = f"\U0001f50a {name}" if vid == current_voice_id else f"{name}"
+        keyboard.append([InlineKeyboardButton(label, callback_data=f"set_voice_{vid}")])
+
+    speed_row = []
+    for speed_val in SPEED_OPTIONS:
+        emoji = "\U0001f422 " if speed_val == 0.75 else ("\U0001f407 " if speed_val == 1.25 else "")
+        marker = " \u25cf" if speed_val == current_speed else ""
+        speed_row.append(InlineKeyboardButton(f"{emoji}{speed_val}x{marker}", callback_data=f"set_speed_{speed_val}"))
+    keyboard.append(speed_row)
+
+    keyboard.append([HIDE_BUTTON])
+    return InlineKeyboardMarkup(keyboard)
+
+
+def level_picker_keyboard(current_level: str = "A1") -> InlineKeyboardMarkup:
+    """Botoes para escolha de nivel (dentro do config)."""
+    from bot.services.level_manager import LevelManager
+
+    keyboard = []
+    for level in LevelManager.VALID_LEVELS:
+        label = LevelManager.LEVEL_LABELS[level]
+        if level == current_level:
+            label = f"\u2705 {label}"
+        keyboard.append([InlineKeyboardButton(label, callback_data=f"set_level_{level}")])
+    keyboard.append([HIDE_BUTTON])
+    return InlineKeyboardMarkup(keyboard)
+
+
+async def cleanup_old_buttons(context, chat_id: int) -> None:
+    """Remove botoes de acao de todas as mensagens do bot rastreadas."""
+    msg_ids = context.user_data.get("button_msg_ids", [])
+    if not msg_ids:
+        return
+    for msg_id in list(msg_ids):
+        try:
+            await context.bot.edit_message_reply_markup(
+                chat_id=chat_id, message_id=msg_id, reply_markup=None
+            )
+            await asyncio.sleep(0.05)
+        except Exception:
+            pass
+    context.user_data["button_msg_ids"] = []
 
 
 def back_to_menu_button() -> InlineKeyboardMarkup:
