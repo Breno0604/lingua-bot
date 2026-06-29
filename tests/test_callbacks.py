@@ -205,3 +205,180 @@ class TestCallbackActions:
         text = mock_update.callback_query.edit_message_text.call_args[0][0]
         assert "breakfast" in text
         assert "Vocabulary" in text
+
+
+class TestConfigCallbacks:
+    """Testes para callbacks do menu de configuracao."""
+
+    @pytest.mark.asyncio
+    async def test_show_config(self, mock_update, configured_context):
+        """show_config exibe menu de configuracao."""
+        configured_context.user_data = {}
+        mock_update.callback_query.data = "show_config"
+        await handle_callback(mock_update, configured_context)
+        mock_update.callback_query.edit_message_reply_markup.assert_called_once()
+        assert configured_context.user_data.get("screen_type") == "config_menu"
+
+    @pytest.mark.asyncio
+    async def test_show_voice_picker(self, mock_update, configured_context):
+        """show_voice_picker exibe seletor de voz."""
+        mock_update.callback_query.data = "show_voice_picker"
+        configured_context.user_data = {}
+        await handle_callback(mock_update, configured_context)
+        mock_update.callback_query.edit_message_reply_markup.assert_called_once()
+        assert configured_context.user_data.get("screen_type") == "voice_picker"
+
+    @pytest.mark.asyncio
+    async def test_show_speed_picker(self, mock_update, configured_context):
+        """show_speed_picker exibe seletor de velocidade."""
+        mock_update.callback_query.data = "show_speed_picker"
+        configured_context.user_data = {}
+        await handle_callback(mock_update, configured_context)
+        mock_update.callback_query.edit_message_reply_markup.assert_called_once()
+        assert configured_context.user_data.get("screen_type") == "speed_picker"
+
+    @pytest.mark.asyncio
+    async def test_show_level_picker(self, mock_update, configured_context):
+        """show_level_picker exibe seletor de nivel."""
+        from bot.services.level_manager import LevelManager
+        configured_context.bot_data["level_manager"] = LevelManager()
+        configured_context.user_data = {}
+        mock_update.callback_query.data = "show_level_picker"
+        await handle_callback(mock_update, configured_context)
+        mock_update.callback_query.edit_message_reply_markup.assert_called_once()
+        assert configured_context.user_data.get("screen_type") == "level_picker"
+
+
+class TestVoiceCallbacks:
+    """Testes para callbacks de selecao de voz."""
+
+    @pytest.mark.asyncio
+    async def test_set_voice_valid(self, mock_update, configured_context):
+        """set_voice_com voz valida atualiza preferencia."""
+        from bot.services.deepgram_tts import VOICE_IDS, VOICE_MAP
+        configured_context.bot_data["deepgram_tts"] = MagicMock()
+        valid_voice = VOICE_IDS[0]
+        mock_update.callback_query.data = f"set_voice_{valid_voice}"
+        configured_context.user_data = {}
+        await handle_callback(mock_update, configured_context)
+        assert configured_context.user_data.get("voice_id") == valid_voice
+
+    @pytest.mark.asyncio
+    async def test_set_voice_invalid(self, mock_update, configured_context):
+        """set_voice_com voz invalida mostra erro."""
+        configured_context.bot_data["deepgram_tts"] = MagicMock()
+        mock_update.callback_query.data = "set_voice_invalid_voice"
+        configured_context.user_data = {}
+        await handle_callback(mock_update, configured_context)
+        mock_update.callback_query.edit_message_text.assert_called_once()
+        text = mock_update.callback_query.edit_message_text.call_args[0][0]
+        assert "Invalid voice" in text
+
+    @pytest.mark.asyncio
+    async def test_set_voice_without_tts_service(self, mock_update, mock_context):
+        """set_voice_sem servico de audio mostra erro."""
+        mock_update.callback_query.data = "set_voice_aura-2-thalia-en"
+        await handle_callback(mock_update, mock_context)
+        mock_update.callback_query.edit_message_text.assert_called_once()
+        text = mock_update.callback_query.edit_message_text.call_args[0][0]
+        assert "audio" in text.lower()
+
+
+class TestLevelCallbacks:
+    """Testes para callbacks de selecao de nivel."""
+
+    @pytest.mark.asyncio
+    async def test_set_level_valid(self, mock_update, configured_context):
+        """set_level_com nivel valido atualiza e persiste."""
+        from bot.services.level_manager import LevelManager
+        level_mgr = LevelManager(default_level="A1")
+        configured_context.bot_data["level_manager"] = level_mgr
+        mock_update.callback_query.data = "set_level_B1"
+        configured_context.user_data = {}
+        await handle_callback(mock_update, configured_context)
+        assert level_mgr.get_level(12345) == "B1"
+        mock_update.callback_query.edit_message_text.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_set_level_without_manager(self, mock_update, configured_context):
+        """set_level_sem level_manager mostra erro."""
+        configured_context.bot_data["level_manager"] = None
+        mock_update.callback_query.data = "set_level_A2"
+        await handle_callback(mock_update, configured_context)
+        mock_update.callback_query.edit_message_text.assert_called()
+        text = mock_update.callback_query.edit_message_text.call_args[0][0]
+        assert "not ready" in text.lower()
+
+    @pytest.mark.asyncio
+    async def test_set_level_updates_speed(self, mock_update, configured_context):
+        """set_level_reseta velocidade para o padrao do nivel."""
+        from bot.services.level_manager import LevelManager
+        from bot.constants import DEFAULT_SPEED_BY_LEVEL
+        level_mgr = LevelManager(default_level="A1")
+        configured_context.bot_data["level_manager"] = level_mgr
+        mock_update.callback_query.data = "set_level_A1"
+        configured_context.user_data = {"tts_speed": 1.25}
+        await handle_callback(mock_update, configured_context)
+        assert configured_context.user_data.get("tts_speed") == DEFAULT_SPEED_BY_LEVEL["A1"]
+
+
+class TestExpandCollapseCallbacks:
+    """Testes para botoes de expandir/recolher."""
+
+    @pytest.mark.asyncio
+    async def test_show_more_options(self, mock_update, configured_context):
+        """show_more_options expande botoes."""
+        mock_update.callback_query.data = "show_more_options"
+        configured_context.user_data = {}
+        await handle_callback(mock_update, configured_context)
+        mock_update.callback_query.edit_message_text.assert_called()
+
+    @pytest.mark.asyncio
+    async def test_hide_options(self, mock_update, configured_context):
+        """hide_options recolhe botoes."""
+        mock_update.callback_query.data = "hide_options"
+        configured_context.user_data = {}
+        await handle_callback(mock_update, configured_context)
+        mock_update.callback_query.edit_message_reply_markup.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_show_more_options_config_menu_ignored(self, mock_update, configured_context):
+        """show_more_options em config_menu nao faz nada."""
+        configured_context.user_data["screen_type"] = "config_menu"
+        mock_update.callback_query.data = "show_more_options"
+        await handle_callback(mock_update, configured_context)
+        mock_update.callback_query.edit_message_reply_markup.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_show_more_options_in_voice_picker(self, mock_update, configured_context):
+        """show_more_options em voice_picker nao faz nada."""
+        configured_context.user_data["screen_type"] = "voice_picker"
+        mock_update.callback_query.data = "show_more_options"
+        await handle_callback(mock_update, configured_context)
+        mock_update.callback_query.edit_message_reply_markup.assert_not_called()
+
+
+class TestVocabPaginationCallbacks:
+    """Testes para paginacao de vocabulario."""
+
+    @pytest.mark.asyncio
+    async def test_vocab_page_navigation(self, mock_update, configured_context, sample_vocab_entries):
+        """vocab_page_N navega para pagina N."""
+        configured_context.bot_data["db"].get_vocab_count = AsyncMock(return_value=3)
+        configured_context.bot_data["db"].get_vocab = AsyncMock(return_value=sample_vocab_entries)
+        mock_update.callback_query.data = "vocab_page_1"
+        configured_context.user_data = {}
+        await handle_callback(mock_update, configured_context)
+        mock_update.callback_query.edit_message_text.assert_called_once()
+        assert configured_context.user_data.get("page") == 1
+        assert configured_context.user_data.get("screen_type") == "vocab"
+
+    @pytest.mark.asyncio
+    async def test_vocab_page_no_db(self, mock_update, configured_context):
+        """vocab_page_sem db mostra erro."""
+        configured_context.bot_data["db"] = None
+        mock_update.callback_query.data = "vocab_page_1"
+        await handle_callback(mock_update, configured_context)
+        mock_update.callback_query.edit_message_text.assert_called_once()
+        text = mock_update.callback_query.edit_message_text.call_args[0][0]
+        assert "not ready" in text.lower()

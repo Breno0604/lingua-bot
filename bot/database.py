@@ -15,7 +15,7 @@ import sqlite3
 import os
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 logger = logging.getLogger(__name__)
@@ -404,7 +404,7 @@ class SupabaseDatabase(BaseDatabase):
                 self._client.table("vocabulary").update(
                     {
                         "practice_count": current_count + 1,
-                        "reviewed_at": datetime.utcnow().isoformat(),
+                        "reviewed_at": datetime.now(timezone.utc).isoformat(),
                     }
                 ).eq("id", word_id).eq("user_id", user_id).execute()
         except Exception as e:
@@ -447,7 +447,7 @@ class SupabaseDatabase(BaseDatabase):
                 "level": level if level is not None else current.level,
                 "voice_id": voice_id if voice_id is not None else current.voice_id,
                 "tts_speed": tts_speed if tts_speed is not None else current.tts_speed,
-                "updated_at": datetime.utcnow().isoformat(),
+                "updated_at": datetime.now(timezone.utc).isoformat(),
             }
             self._client.table("user_preferences").upsert(
                 data, on_conflict=["user_id"]

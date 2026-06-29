@@ -44,11 +44,55 @@ O **LinguaBot** e um bot do Telegram que atua como professor particular de ingle
 | **Banco (dev)** | SQLite |
 | **Banco (prod)** | Supabase (PostgreSQL) |
 | **Hospedagem** | Render (Web Service, free tier) |
-| **Testes** | pytest + mocks (72 testes) |
+| **Testes** | pytest + mocks (206 testes) |
 
 ---
 
-## ✅ Pre-requisitos
+## 🏗 Arquitetura
+
+```mermaid
+graph TB
+    subgraph User["👤 Usuario"]
+        TG[Telegram]
+    end
+
+    subgraph Host["☁️ Render Web Service"]
+        WH[FastAPI<br/>webhook_server.py]
+        PTB[python-telegram-bot<br/>Application]
+        subgraph Bot["🤖 Bot Logic"]
+            MAIN[main.py<br/>build_application]
+            HAND[Handlers<br/>message / callbacks / commands]
+            SVC[Services<br/>Groq / Conversation]
+            UTIL[Utils<br/>RateLimiter / Formatting]
+        end
+        DB_IFACE[Database Abstraction<br/>database.py]
+    end
+
+    subgraph External["🌐 Servicos Externos"]
+        GROQ[Groq API<br/>llama-3.3-70b]
+        subgraph DB_OPT["Bancos de Dados"]
+            SQL[(SQLite<br/>Dev)]
+            SUP[(Supabase<br/>Prod)]
+        end
+    end
+
+    TG -->|HTTP POST| WH
+    WH --> PTB
+    PTB --> HAND
+    HAND --> SVC
+    HAND --> UTIL
+    SVC -.->|API Key| GROQ
+    HAND --> DB_IFACE
+    DB_IFACE --> SQL
+    DB_IFACE --> SUP
+
+    style TG fill:#e1f5fe
+    style GROQ fill:#fff3e0
+    style SQL fill:#e8f5e9
+    style SUP fill:#e8f5e9
+```
+
+---
 
 - **Python 3.11+** instalado
 - **Conta no Telegram** e um bot criado via [@BotFather](https://t.me/BotFather)
@@ -336,14 +380,17 @@ lingua-bot/
     ├── test_formatting.py     # Testes de formatacao e extracao (16 testes)
     ├── test_groq.py           # Testes do GroqService mockado (11 testes)
     ├── test_commands.py       # Testes de /reset, /vocab, /topic (6 testes)
-    └── test_callbacks.py      # Testes de botoes inline (11 testes)
+    ├── test_callbacks.py      # Testes de botoes inline (31 testes)
+    ├── test_message.py        # Testes do message handler (24 testes)
+    ├── test_database.py       # Testes do SQLite e Supabase (21 testes)
+    └── test_webhook_server.py # Testes do servidor webhook (8 testes)
 ```
 
 ---
 
 ## 🧪 Testes
 
-O projeto possui **72 testes unitarios** com pytest:
+O projeto possui **206 testes unitarios** com pytest:
 
 ```bash
 # Rodar todos os testes

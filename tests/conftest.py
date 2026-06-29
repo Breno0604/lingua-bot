@@ -44,6 +44,7 @@ def mock_update():
     cq = MagicMock()
     cq.answer = AsyncMock()
     cq.edit_message_text = AsyncMock()
+    cq.edit_message_reply_markup = AsyncMock()
     cq.from_user.id = 12345
     cq.message = MagicMock()
     cq.message.voice = None  # nao e mensagem de voz por padrao
@@ -147,3 +148,11 @@ def sample_vocab_entries():
             created_at="2026-06-25 15:00:00", reviewed_at=None, practice_count=0,
         ),
     ]
+
+
+@pytest.fixture
+def mock_level_manager():
+    """Cria um mock do LevelManager com suporte a async set_level."""
+    from bot.services.level_manager import LevelManager
+    mgr = LevelManager(default_level="A1")
+    return mgr
