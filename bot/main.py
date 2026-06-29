@@ -73,40 +73,40 @@ def build_application() -> Application:
     #   2. Se falhou -> tenta elevenlabs.generate_speech(text) [Rachel]
     #   3. Se ambos falharam -> resposta sem audio
 
+    # ── STT (Speech-to-Text) ──
     if config.deepgram_api_key:
-        # Deepgram Aura TTS (primario - 4 vozes)
-        deepgram_tts_service = DeepgramTTSService(api_key=config.deepgram_api_key)
-        application.bot_data["deepgram_tts"] = deepgram_tts_service
-
-        # Deepgram STT (transcricao de audio do usuario)
         deepgram_stt_service = DeepgramService(config.deepgram_api_key)
         application.bot_data["deepgram"] = deepgram_stt_service
+        application.add_handler(
+            MessageHandler(filters.VOICE | filters.AUDIO, handle_audio)
+        )
+        logger.info("Deepgram STT inicializado")
 
+    # ── TTS (Text-to-Speech) ──
+    deepgram_tts_service = None
+    elevenlabs_service = None
+
+    if config.deepgram_api_key:
+        deepgram_tts_service = DeepgramTTSService(api_key=config.deepgram_api_key)
+        application.bot_data["deepgram_tts"] = deepgram_tts_service
         logger.info("Deepgram Aura TTS inicializado (primario)")
 
-        if config.elevenlabs_api_key:
-            # ElevenLabs TTS (fallback - apenas Rachel)
-            elevenlabs_service = ElevenLabsService(api_key=config.elevenlabs_api_key)
-            application.bot_data["elevenlabs"] = elevenlabs_service
-            logger.info("ElevenLabs TTS inicializado (fallback)")
+    if config.elevenlabs_api_key:
+        elevenlabs_service = ElevenLabsService(api_key=config.elevenlabs_api_key)
+        application.bot_data["elevenlabs"] = elevenlabs_service
+        logger.info("ElevenLabs TTS inicializado" +
+                    (" (fallback)" if deepgram_tts_service else ""))
 
-        # TTS Orchestrator (unifica Deepgram primario + ElevenLabs fallback)
+    if deepgram_tts_service or elevenlabs_service:
         tts_orchestrator = TTSOrchestrator(
             deepgram_tts=deepgram_tts_service,
-            elevenlabs=elevenlabs_service if config.elevenlabs_api_key else None,
+            elevenlabs=elevenlabs_service,
         )
         application.bot_data["tts_orchestrator"] = tts_orchestrator
         logger.info("TTSOrchestrator inicializado")
 
-        # Handler de mensagens de voz (depende de Deepgram STT)
-        application.add_handler(
-            MessageHandler(filters.VOICE | filters.AUDIO, handle_audio)
-        )
-    else:
-        logger.info(
-            "DEEPGRAM_API_KEY nao configurada — pulando servicos de audio. "
-            "Defina DEEPGRAM_API_KEY no .env"
-        )
+    if not config.deepgram_api_key and not config.elevenlabs_api_key:
+        logger.info("Nenhuma chave de API de audio configurada — pulando servicos de audio")
 
     # --- Handlers de Comandos ---
     application.add_handler(CommandHandler("start", start))

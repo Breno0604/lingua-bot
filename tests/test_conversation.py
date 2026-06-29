@@ -113,20 +113,6 @@ class TestConversationManager:
         mgr = ConversationManager()
         mgr.reset(99999)  # Nao deve levantar excecao
 
-    def test_remove(self):
-        """Remove remove o contexto do usuario."""
-        mgr = ConversationManager()
-        mgr.get_or_create(12345)
-        assert mgr.active_users == 1
-
-        mgr.remove(12345)
-        assert mgr.active_users == 0
-
-    def test_remove_nonexistent(self):
-        """Remove em usuario inexistente nao causa erro."""
-        mgr = ConversationManager()
-        mgr.remove(99999)
-
     def test_active_users(self):
         """active_users conta usuarios com contexto."""
         mgr = ConversationManager()
@@ -136,9 +122,6 @@ class TestConversationManager:
         mgr.get_or_create(2)
         mgr.get_or_create(3)
         assert mgr.active_users == 3
-
-        mgr.remove(2)
-        assert mgr.active_users == 2
 
     def test_multiple_users_independent(self):
         """Contextos de usuarios diferentes sao independentes."""

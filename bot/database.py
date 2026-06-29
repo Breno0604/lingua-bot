@@ -10,12 +10,15 @@ A escolha e feita automaticamente baseada na presenca de SUPABASE_URL.
 
 from __future__ import annotations
 
+import logging
 import sqlite3
 import os
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Optional
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -315,16 +318,19 @@ class SupabaseDatabase(BaseDatabase):
         context: str = "",
         level: str = "A1",
     ) -> None:
-        data = {
-            "user_id": user_id,
-            "word": word.lower().strip(),
-            "translation": translation.strip(),
-            "context": context,
-            "level": level.upper().strip(),
-        }
-        self._client.table("vocabulary").upsert(
-            data, on_conflict=["user_id", "word"]
-        ).execute()
+        try:
+            data = {
+                "user_id": user_id,
+                "word": word.lower().strip(),
+                "translation": translation.strip(),
+                "context": context,
+                "level": level.upper().strip(),
+            }
+            self._client.table("vocabulary").upsert(
+                data, on_conflict=["user_id", "word"]
+            ).execute()
+        except Exception as e:
+            logger.error("Erro ao salvar vocabulario no Supabase: %s", e)
 
     async def get_vocab(
         self,
@@ -333,65 +339,76 @@ class SupabaseDatabase(BaseDatabase):
         page_size: int = 10,
         level: Optional[str] = None,
     ) -> list[VocabEntry]:
-        offset = (page - 1) * page_size
-        query = (
-            self._client.table("vocabulary")
-            .select("*")
-            .eq("user_id", user_id)
-            .order("created_at", desc=True)
-        )
-        if level:
-            query = query.eq("level", level.upper())
-
-        response = query.range(offset, offset + page_size - 1).execute()
-
-        return [
-            VocabEntry(
-                id=item["id"],
-                user_id=item["user_id"],
-                word=item["word"],
-                translation=item["translation"],
-                context=item.get("context"),
-                created_at=item["created_at"],
-                reviewed_at=item.get("reviewed_at"),
-                practice_count=item.get("practice_count", 0),
-                level=item.get("level", "A1"),
+        try:
+            offset = (page - 1) * page_size
+            query = (
+                self._client.table("vocabulary")
+                .select("*")
+                .eq("user_id", user_id)
+                .order("created_at", desc=True)
             )
-            for item in response.data
-        ]
+            if level:
+                query = query.eq("level", level.upper())
+
+            response = query.range(offset, offset + page_size - 1).execute()
+
+            return [
+                VocabEntry(
+                    id=item["id"],
+                    user_id=item["user_id"],
+                    word=item["word"],
+                    translation=item["translation"],
+                    context=item.get("context"),
+                    created_at=item["created_at"],
+                    reviewed_at=item.get("reviewed_at"),
+                    practice_count=item.get("practice_count", 0),
+                    level=item.get("level", "A1"),
+                )
+                for item in response.data
+            ]
+        except Exception as e:
+            logger.error("Erro ao buscar vocabulario no Supabase: %s", e)
+            return []
 
     async def get_vocab_count(
         self,
         user_id: int,
         level: Optional[str] = None,
     ) -> int:
-        query = (
-            self._client.table("vocabulary")
-            .select("id", count="exact")
-            .eq("user_id", user_id)
-        )
-        if level:
-            query = query.eq("level", level.upper())
+        try:
+            query = (
+                self._client.table("vocabulary")
+                .select("id", count="exact")
+                .eq("user_id", user_id)
+            )
+            if level:
+                query = query.eq("level", level.upper())
 
-        response = query.execute()
-        return response.count or 0
+            response = query.execute()
+            return response.count or 0
+        except Exception as e:
+            logger.error("Erro ao contar vocabulario no Supabase: %s", e)
+            return 0
 
     async def practice_word(self, user_id: int, word_id: int) -> None:
-        response = (
-            self._client.table("vocabulary")
-            .select("practice_count")
-            .eq("id", word_id)
-            .eq("user_id", user_id)
-            .execute()
-        )
-        if response.data:
-            current_count = response.data[0].get("practice_count", 0)
-            self._client.table("vocabulary").update(
-                {
-                    "practice_count": current_count + 1,
-                    "reviewed_at": datetime.utcnow().isoformat(),
-                }
-            ).eq("id", word_id).eq("user_id", user_id).execute()
+        try:
+            response = (
+                self._client.table("vocabulary")
+                .select("practice_count")
+                .eq("id", word_id)
+                .eq("user_id", user_id)
+                .execute()
+            )
+            if response.data:
+                current_count = response.data[0].get("practice_count", 0)
+                self._client.table("vocabulary").update(
+                    {
+                        "practice_count": current_count + 1,
+                        "reviewed_at": datetime.utcnow().isoformat(),
+                    }
+                ).eq("id", word_id).eq("user_id", user_id).execute()
+        except Exception as e:
+            logger.error("Erro ao praticar palavra no Supabase: %s", e)
 
     async def get_user_preferences(self, user_id: int) -> UserPreferences:
         """Retorna as preferencias do usuario do Supabase."""

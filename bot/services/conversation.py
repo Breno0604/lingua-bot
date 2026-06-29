@@ -65,10 +65,6 @@ class ConversationManager:
         if user_id in self._contexts:
             self._contexts[user_id].clear()
 
-    def remove(self, user_id: int) -> None:
-        """Remove o contexto de um usuario."""
-        self._contexts.pop(user_id, None)
-
     @property
     def active_users(self) -> int:
         """Numero de usuarios com conversa ativa."""

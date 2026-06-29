@@ -11,33 +11,14 @@ Inclui:
 """
 
 import logging
-import re
 from typing import Optional
 
 from elevenlabs.client import ElevenLabs as ElevenLabsClient
 
 from bot.audio_cache import AudioCache
+from bot.utils.text_processing import clean_text, truncate_text
 
 logger = logging.getLogger(__name__)
-
-# Mesmo padrao usado no DeepgramTTSService
-EMOJI_PATTERN = re.compile(
-    "["
-    "\U0001F600-\U0001F64F"
-    "\U0001F300-\U0001F5FF"
-    "\U0001F680-\U0001F6FF"
-    "\U0001F1E0-\U0001F1FF"
-    "\U00002702-\U000027B0"
-    "\U000024C2-\U0001F251"
-    "\U0001F900-\U0001F9FF"
-    "\U0001FA00-\U0001FA6F"
-    "\U0001FA70-\U0001FAFF"
-    "\U00002600-\U000026FF"
-    "\U0000FE00-\U0000FE0F"
-    "\U0000200D"
-    "]+",
-    flags=re.UNICODE,
-)
 
 # Voz unica de fallback
 DEFAULT_VOICE_ID = "JBFqnCBsd6RMkjVDRZzb"  # Rachel
@@ -66,26 +47,6 @@ class ElevenLabsService:
             self._client = ElevenLabsClient(api_key=self.api_key)
         return self._client
 
-    def _clean_text(self, text: str) -> str:
-        """Remove emojis que o TTS tentaria pronunciar."""
-        return EMOJI_PATTERN.sub("", text).strip()
-
-    def _truncate_text(self, text: str, max_chars: int = 100) -> str:
-        """Trunca o texto mantendo a frase completa."""
-        if len(text) <= max_chars:
-            return text
-
-        truncated = text[:max_chars]
-        last_period = truncated.rfind(".")
-        if last_period > max_chars // 2:
-            return truncated[: last_period + 1].strip()
-
-        last_space = truncated.rfind(" ")
-        if last_space > max_chars // 2:
-            return truncated[:last_space].strip() + "."
-
-        return truncated.strip() + "."
-
     async def generate_speech(self, text: str, speed: float = 1.0) -> Optional[bytes]:
         """Gera audio com ElevenLabs (voz Rachel).
 
@@ -100,12 +61,12 @@ class ElevenLabsService:
             Bytes MP3, ou None se falhou.
         """
         # 1. Remove emojis (ElevenLabs tentaria pronuncia-los)
-        cleaned = self._clean_text(text)
+        cleaned = clean_text(text)
         if not cleaned:
             return None
 
         # 2. Trunca
-        truncated = self._truncate_text(cleaned, max_chars=self.max_text_chars)
+        truncated = truncate_text(cleaned, max_chars=self.max_text_chars)
 
         # 2. Cache
         cache_key = f"el:{speed}:{truncated}"

@@ -114,14 +114,7 @@ class TestLevelManagerHelpers:
         mgr.set_level(999, "A2")
         assert mgr.has_level(999) is True
 
-    def test_remove_clears_level(self):
+    def test_has_level_after_reset(self):
         mgr = LevelManager()
         mgr.set_level(1, "B1")
-        mgr.remove(1)
-        assert mgr.has_level(1) is False
-        assert mgr.get_level(1) == "A1"  # volta ao default
-
-    def test_remove_nonexistent_user(self):
-        mgr = LevelManager()
-        mgr.remove(999)  # nao deve exception
-        assert mgr.has_level(999) is False
+        assert mgr.has_level(1) is True

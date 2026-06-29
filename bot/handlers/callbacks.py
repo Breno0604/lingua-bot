@@ -417,11 +417,11 @@ async def _set_speed(query, context: ContextTypes.DEFAULT_TYPE, speed: float) ->
 
 async def _show_menu(query, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Exibe o menu principal (comprimido)."""
-    from bot.handlers.start import _get_welcome_text
+    from bot.utils.formatting import get_welcome_text
 
     user = query.from_user
     first_name = user.first_name if user else "there"
-    welcome = _get_welcome_text(first_name)
+    welcome = get_welcome_text(first_name)
 
     _set_screen_type(context, "menu")
 

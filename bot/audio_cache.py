@@ -32,10 +32,6 @@ class AudioCache:
         key = self._hash(text)
         self._cache[key] = audio
 
-    def clear(self) -> None:
-        """Limpa todo o cache."""
-        self._cache.clear()
-
     @property
     def size(self) -> int:
         """Numero de itens no cache."""

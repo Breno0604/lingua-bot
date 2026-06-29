@@ -14,13 +14,11 @@ from telegram.ext import ContextTypes
 
 from bot.database import BaseDatabase
 from bot.services.conversation import ConversationManager
-from bot.services.groq import GroqService
 from bot.services.level_manager import LevelManager
 from bot.utils.formatting import (
     format_topic_suggestion,
     format_vocab_list,
     get_random_topic,
-    split_long_message,
 )
 from bot.utils.keyboards import (
     back_to_menu_button,

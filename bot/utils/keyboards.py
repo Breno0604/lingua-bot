@@ -61,9 +61,11 @@ def conversation_buttons(expanded: bool = False) -> InlineKeyboardMarkup:
     """Botoes exibidos apos cada resposta do bot."""
     if expanded:
         keyboard = [
-            [InlineKeyboardButton("\U0001f4dd Example", callback_data="more_examples")],
-            [InlineKeyboardButton("\U0001f4d6 Explain", callback_data="explain_word")],
-            [InlineKeyboardButton("\U0001f3af Practice", callback_data="practice_this")],
+            [
+                InlineKeyboardButton("\U0001f4dd Example", callback_data="more_examples"),
+                InlineKeyboardButton("\U0001f4d6 Explain", callback_data="explain_word"),
+                InlineKeyboardButton("\U0001f3af Practice", callback_data="practice_this"),
+            ],
             [HIDE_BUTTON],
         ]
         return InlineKeyboardMarkup(keyboard)
@@ -112,8 +114,6 @@ def topics_menu(expanded: bool = False) -> InlineKeyboardMarkup:
         ],
         [
             InlineKeyboardButton("\U0001f4c5 Daily Routine", callback_data="start_topic_Daily Routine"),
-        ],
-        [
             InlineKeyboardButton("\U0001f3b2 Random Topic", callback_data="show_topics"),
         ],
         [InlineKeyboardButton("\U0001f519 Back to Menu", callback_data="back_to_menu")],
@@ -123,39 +123,47 @@ def topics_menu(expanded: bool = False) -> InlineKeyboardMarkup:
 
 def level_selection_keyboard(current_level: str = "A1") -> InlineKeyboardMarkup:
     """Botoes para escolha de nivel de ingles. SEM compressao — sempre visivel."""
-    from bot.services.level_manager import LevelManager
+    VALID_LEVELS = ["A1", "A2", "B1"]
+    LEVEL_LABELS = {
+        "A1": "A1 - Iniciante",
+        "A2": "A2 - B\u00e1sico",
+        "B1": "B1 - Intermedi\u00e1rio",
+    }
 
-    keyboard = []
-    for level in LevelManager.VALID_LEVELS:
-        label = LevelManager.LEVEL_LABELS[level]
+    row = []
+    for level in VALID_LEVELS:
+        label = LEVEL_LABELS[level]
         if level == current_level:
             label = f"\u2705 {label}"
-        keyboard.append([InlineKeyboardButton(label, callback_data=f"set_level_{level}")])
-    return InlineKeyboardMarkup(keyboard)
+        row.append(InlineKeyboardButton(label, callback_data=f"set_level_{level}"))
+    return InlineKeyboardMarkup([row])
 
 
 def voice_selection_keyboard(current_voice_id: str, current_speed: float = 1.0) -> InlineKeyboardMarkup:
-    """Botoes para escolha de voz (Deepgram Aura) + velocidade.
-
-    Inclui 5 opcoes de velocidade (0.75 a 1.25).
-    SEM compressao — sempre visivel.
-    """
-    from bot.services.deepgram_tts import VOICES
+    """Botoes para escolha de voz (Deepgram Aura) + velocidade."""
+    VOICES = [
+        ("aura-2-thalia-en", "Thalia", "Feminine, clear, confident, energetic"),
+        ("aura-2-odysseus-en", "Odysseus", "Masculine, calm, smooth, professional"),
+        ("aura-2-helena-en", "Helena", "Feminine, caring, natural, friendly"),
+        ("aura-2-mars-en", "Mars", "Masculine, smooth, patient, trustworthy, baritone"),
+    ]
 
     keyboard = []
-    # Secao de vozes
-    for vid, name, desc in VOICES:
-        label = f"\U0001f50a {name}" if vid == current_voice_id else f"{name}"
-        keyboard.append([InlineKeyboardButton(label, callback_data=f"set_voice_{vid}")])
+    # Vozes em pares (2 por linha)
+    for i in range(0, len(VOICES), 2):
+        row = []
+        for vid, name, desc in VOICES[i:i+2]:
+            label = f"\U0001f50a {name}" if vid == current_voice_id else f"{name}"
+            row.append(InlineKeyboardButton(label, callback_data=f"set_voice_{vid}"))
+        keyboard.append(row)
 
-    # Secao de velocidade
     speed_row = []
     for speed_val in SPEED_OPTIONS:
         emoji = ""
         if speed_val == 0.75:
-            emoji = "\U0001f422 "  # turtle
+            emoji = "\U0001f422 "
         elif speed_val == 1.25:
-            emoji = "\U0001f407 "   # rabbit
+            emoji = "\U0001f407 "
         marker = " \u25cf" if speed_val == current_speed else ""
         label = f"{emoji}{speed_val}x{marker}"
         speed_row.append(InlineKeyboardButton(label, callback_data=f"set_speed_{speed_val}"))
@@ -168,9 +176,11 @@ def voice_selection_keyboard(current_voice_id: str, current_speed: float = 1.0) 
 def config_menu_keyboard() -> InlineKeyboardMarkup:
     """Botoes do menu de configuracao: Voice, Speed, Level."""
     keyboard = [
-        [InlineKeyboardButton("\U0001f3a4 Voice", callback_data="show_voice_picker")],
-        [InlineKeyboardButton("\u26a1 Speed", callback_data="show_speed_picker")],
-        [InlineKeyboardButton("\U0001f4ca Level", callback_data="show_level_picker")],
+        [
+            InlineKeyboardButton("\U0001f3a4 Voice", callback_data="show_voice_picker"),
+            InlineKeyboardButton("\u26a1 Speed", callback_data="show_speed_picker"),
+            InlineKeyboardButton("\U0001f4ca Level", callback_data="show_level_picker"),
+        ],
         [HIDE_BUTTON],
     ]
     return InlineKeyboardMarkup(keyboard)
@@ -178,12 +188,20 @@ def config_menu_keyboard() -> InlineKeyboardMarkup:
 
 def voice_picker_keyboard(current_voice_id: str) -> InlineKeyboardMarkup:
     """Botoes para escolha de voz (apenas vozes, sem velocidade)."""
-    from bot.services.deepgram_tts import VOICES
+    VOICES = [
+        ("aura-2-thalia-en", "Thalia"),
+        ("aura-2-odysseus-en", "Odysseus"),
+        ("aura-2-helena-en", "Helena"),
+        ("aura-2-mars-en", "Mars"),
+    ]
 
     keyboard = []
-    for vid, name, desc in VOICES:
-        label = f"\U0001f50a {name}" if vid == current_voice_id else f"{name}"
-        keyboard.append([InlineKeyboardButton(label, callback_data=f"set_voice_{vid}")])
+    for i in range(0, len(VOICES), 2):
+        row = []
+        for vid, name in VOICES[i:i+2]:
+            label = f"\U0001f50a {name}" if vid == current_voice_id else f"{name}"
+            row.append(InlineKeyboardButton(label, callback_data=f"set_voice_{vid}"))
+        keyboard.append(row)
 
     keyboard.append([HIDE_BUTTON])
     return InlineKeyboardMarkup(keyboard)
@@ -202,16 +220,20 @@ def speed_picker_keyboard(current_speed: float = 1.0) -> InlineKeyboardMarkup:
 
 def level_picker_keyboard(current_level: str = "A1") -> InlineKeyboardMarkup:
     """Botoes para escolha de nivel (dentro do config)."""
-    from bot.services.level_manager import LevelManager
+    VALID_LEVELS = ["A1", "A2", "B1"]
+    LEVEL_LABELS = {
+        "A1": "A1 - Iniciante",
+        "A2": "A2 - B\u00e1sico",
+        "B1": "B1 - Intermedi\u00e1rio",
+    }
 
-    keyboard = []
-    for level in LevelManager.VALID_LEVELS:
-        label = LevelManager.LEVEL_LABELS[level]
+    row = []
+    for level in VALID_LEVELS:
+        label = LEVEL_LABELS[level]
         if level == current_level:
             label = f"\u2705 {label}"
-        keyboard.append([InlineKeyboardButton(label, callback_data=f"set_level_{level}")])
-    keyboard.append([HIDE_BUTTON])
-    return InlineKeyboardMarkup(keyboard)
+        row.append(InlineKeyboardButton(label, callback_data=f"set_level_{level}"))
+    return InlineKeyboardMarkup([row, [HIDE_BUTTON]])
 
 
 async def cleanup_old_buttons(context, chat_id: int) -> None:

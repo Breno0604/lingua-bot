@@ -18,13 +18,12 @@ from telegram.ext import ContextTypes
 from bot.database import BaseDatabase
 from bot.services.conversation import ConversationManager
 from bot.services.deepgram import DeepgramService
-from bot.handlers.voice_command import _load_audio_prefs_from_db
 from bot.services.deepgram_tts import DEFAULT_VOICE_ID as DG_DEFAULT_VOICE_ID
 from bot.services.groq import GroqService
 from bot.services.level_manager import LevelManager
 from bot.services.tts_orchestrator import TTSOrchestrator
+from bot.utils.db_helpers import extract_vocab_from_reply, load_audio_prefs_from_db, save_vocab_entries
 from bot.utils.keyboards import DEFAULT_SPEED_BY_LEVEL, cleanup_old_buttons, conversation_buttons
-from bot.handlers.message import _extract_and_clean_reply
 
 logger = logging.getLogger(__name__)
 
@@ -101,7 +100,7 @@ async def handle_audio(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     )
 
     # Carrega preferencias do banco (voz, velocidade) se necessario
-    await _load_audio_prefs_from_db(context, user_id)
+    await load_audio_prefs_from_db(context, user_id)
 
     # 6. Entra no fluxo normal da conversa (Groq)
     user_level = level_mgr.get_level(user_id) if level_mgr else "A1"
@@ -123,21 +122,9 @@ async def handle_audio(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
     conv.add_assistant_message(reply)
 
-    clean_reply, words_found = _extract_and_clean_reply(reply)
+    clean_reply, words_found = extract_vocab_from_reply(reply)
 
-    for word_info in words_found:
-        try:
-            await db.save_vocab(
-                user_id=user_id,
-                word=word_info["word"],
-                translation=word_info["translation"],
-                context=word_info["context"],
-                level=user_level,
-            )
-        except Exception as e:
-            logger.error(
-                "Erro ao salvar vocabulario para user %d: %s", user_id, e
-            )
+    await save_vocab_entries(db, user_id, words_found, user_level)
 
     display_text = clean_reply if clean_reply else reply
 

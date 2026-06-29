@@ -151,11 +151,11 @@ class TestSplitLongMessage:
 
 
 class TestExtractVocab:
-    """Testes para a funcao _extract_and_clean_reply."""
+    """Testes para a funcao extract_vocab_from_reply."""
 
     def test_extract_vocab_simple(self):
         """Extrai NEW_WORD e EXAMPLE."""
-        from bot.handlers.message import _extract_and_clean_reply
+        from bot.utils.db_helpers import extract_vocab_from_reply
 
         reply = (
             "Hello! Let's practice!\n\n"
@@ -163,7 +163,7 @@ class TestExtractVocab:
             "EXAMPLE: I eat breakfast at 7am.\n\n"
             "Do you like breakfast?"
         )
-        clean, words = _extract_and_clean_reply(reply)
+        clean, words = extract_vocab_from_reply(reply)
         assert len(words) == 1
         assert words[0]["word"] == "breakfast"
         assert words[0]["translation"] == "cafe da manha"
@@ -173,7 +173,7 @@ class TestExtractVocab:
 
     def test_extract_multiple_words(self):
         """Extrai multiplas palavras."""
-        from bot.handlers.message import _extract_and_clean_reply
+        from bot.utils.db_helpers import extract_vocab_from_reply
 
         reply = (
             "NEW_WORD: dog = cachorro\n"
@@ -181,7 +181,7 @@ class TestExtractVocab:
             "NEW_WORD: cat = gato\n"
             "EXAMPLE: The cat is sleepy.\n"
         )
-        clean, words = _extract_and_clean_reply(reply)
+        clean, words = extract_vocab_from_reply(reply)
         assert len(words) == 2
         assert words[0]["word"] == "dog"
         assert words[0]["context"] == "I have a dog."
@@ -190,18 +190,18 @@ class TestExtractVocab:
 
     def test_no_vocab(self):
         """Resposta sem marcadores nao extrai nada."""
-        from bot.handlers.message import _extract_and_clean_reply
+        from bot.utils.db_helpers import extract_vocab_from_reply
 
         reply = "Hello! How are you today?"
-        clean, words = _extract_and_clean_reply(reply)
+        clean, words = extract_vocab_from_reply(reply)
         assert len(words) == 0
         assert clean == reply
 
     def test_case_insensitive(self):
         """Marcadores sao case-insensitive."""
-        from bot.handlers.message import _extract_and_clean_reply
+        from bot.utils.db_helpers import extract_vocab_from_reply
 
         reply = "new_word: hello = ola\nexample: Hello there!"
-        clean, words = _extract_and_clean_reply(reply)
+        clean, words = extract_vocab_from_reply(reply)
         assert len(words) == 1
         assert words[0]["word"] == "hello"

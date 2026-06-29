@@ -7,7 +7,6 @@ Utilitarios para formatacao de mensagens:
   - Formatacao de data/hora
 """
 
-from datetime import datetime
 from typing import List, Optional
 
 from bot.database import VocabEntry
@@ -94,20 +93,24 @@ def split_long_message(text: str, max_length: int = 4000) -> List[str]:
     return parts
 
 
-def format_date(date_str: Optional[str]) -> str:
-    """Formata uma data ISO para formato amigavel."""
-    if not date_str:
-        return "-"
+def get_welcome_text(first_name: str) -> str:
+    """Retorna o texto de boas-vindas para primeiro acesso."""
+    return (
+        f"\U0001f44b Hello {first_name}! I'm **LinguaBot**, your English teacher! \U0001f389\n\n"
+        "I'm here to help you practice English. We can talk about many topics, "
+        "and I'll gently correct your mistakes along the way.\n\n"
+        "**First, let's set your English level** so I can adapt to you!"
+    )
 
-    try:
-        if "T" in date_str:
-            dt = datetime.fromisoformat(date_str)
-        else:
-            dt = datetime.strptime(date_str, "%Y-%m-%d %H:%M:%S")
 
-        return dt.strftime("%b %d, %Y")
-    except (ValueError, TypeError):
-        return date_str or "-"
+def get_level_choice_text(first_name: str) -> str:
+    """Texto para escolha de nivel (usuario ja tem nivel)."""
+    return (
+        f"\U0001f44b Hello {first_name}! I'm **LinguaBot**, your English teacher! \U0001f389\n\n"
+        "I'm here to help you practice English.\n\n"
+        "**Great! Let's start practicing!** \U0001f680\n\n"
+        "You can change your level anytime with /level"
+    )
 
 
 TOPICS = [

@@ -12,34 +12,14 @@ Fluxo:
 """
 
 import logging
-import re
 from typing import Optional
 
 from deepgram import DeepgramClient
 
 from bot.audio_cache import AudioCache
+from bot.utils.text_processing import clean_text, truncate_text
 
 logger = logging.getLogger(__name__)
-
-# Padrao para remover emojis do texto antes de enviar para TTS
-# Deepgram Aura e ElevenLabs tentam pronunciar emojis (ex: "\U0001f44d" -> "thumbs up")
-EMOJI_PATTERN = re.compile(
-    "["
-    "\U0001F600-\U0001F64F"  # Emoticons
-    "\U0001F300-\U0001F5FF"  # Simbolos e pictogramas
-    "\U0001F680-\U0001F6FF"  # Transporte e mapas
-    "\U0001F1E0-\U0001F1FF"  # Bandeiras (iOS)
-    "\U00002702-\U000027B0"  # Dingbats
-    "\U000024C2-\U0001F251"
-    "\U0001F900-\U0001F9FF"  # Símbolos suplementares
-    "\U0001FA00-\U0001FA6F"  # Símbolos de xadrez
-    "\U0001FA70-\U0001FAFF"  # Símbolos diversos
-    "\U00002600-\U000026FF"  # Miscelânea
-    "\U0000FE00-\U0000FE0F"  # Variation selectors
-    "\U0000200D"             # Zero-width joiner
-    "]+",
-    flags=re.UNICODE,
-)
 
 # ──────────────────────────────────────────────
 # Vozes Deepgram Aura
@@ -57,9 +37,6 @@ VOICES: list[tuple[str, str, str]] = [
 VOICE_MAP: dict[str, tuple[str, str]] = {vid: (name, desc) for vid, name, desc in VOICES}
 VOICE_IDS: list[str] = [vid for vid, _, _ in VOICES]
 DEFAULT_VOICE_ID: str = VOICES[0][0]  # Thalia
-
-MAX_CHARS = 500  # limite por requisicao (Deepgram nao tem limite mensal publico)
-
 
 class DeepgramTTSService:
     """Cliente Deepgram Aura TTS.
@@ -79,26 +56,6 @@ class DeepgramTTSService:
             self._client = DeepgramClient(api_key=self.api_key)
         return self._client
 
-    def _clean_text(self, text: str) -> str:
-        """Remove emojis e caracteres especiais que TTS tentaria pronunciar."""
-        return EMOJI_PATTERN.sub("", text).strip()
-
-    def _truncate_text(self, text: str, max_chars: int = 150) -> str:
-        """Trunca o texto mantendo a frase completa."""
-        if len(text) <= max_chars:
-            return text
-
-        truncated = text[:max_chars]
-        last_period = truncated.rfind(".")
-        if last_period > max_chars // 2:
-            return truncated[: last_period + 1].strip()
-
-        last_space = truncated.rfind(" ")
-        if last_space > max_chars // 2:
-            return truncated[:last_space].strip() + "."
-
-        return truncated.strip() + "."
-
     async def generate_speech(self, text: str, voice_id: str = DEFAULT_VOICE_ID, speed: float = 1.0) -> Optional[bytes]:
         """Gera audio a partir do texto usando Deepgram Aura.
 
@@ -112,12 +69,12 @@ class DeepgramTTSService:
             Bytes do audio (MP3), ou None se falhou.
         """
         # 1. Limpa emojis do texto (Deepgram tentaria pronuncia-los)
-        cleaned = self._clean_text(text)
+        cleaned = clean_text(text)
         if not cleaned:
             return None
 
         # 2. Trunca texto
-        truncated = self._truncate_text(cleaned, max_chars=self.max_text_chars)
+        truncated = truncate_text(cleaned, max_chars=self.max_text_chars)
 
         # 3. Verifica cache
         cache_key = f"dg:{voice_id}:{speed}:{truncated}"

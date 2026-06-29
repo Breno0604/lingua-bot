@@ -109,24 +109,4 @@ class RateLimiter:
             "warning": warning,
         }
 
-    def get_status(self, user_id: int) -> dict:
-        """Retorna o status atual sem incrementar."""
-        today = self._get_today()
 
-        if user_id in self._usage and self._usage[user_id][0] == today:
-            _, count = self._usage[user_id]
-        else:
-            count = 0
-
-        remaining = max(0, self.daily_limit - count)
-
-        return {
-            "current": count,
-            "limit": self.daily_limit,
-            "remaining": remaining,
-        }
-
-    def reset_user(self, user_id: int) -> None:
-        """Reseta o contador de um usuario."""
-        self._usage.pop(user_id, None)
-        self._save()

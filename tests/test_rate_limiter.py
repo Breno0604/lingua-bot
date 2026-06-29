@@ -14,10 +14,10 @@ class TestRateLimiter:
     def test_initial_state(self):
         """RateLimiter comeca sem uso."""
         rl = RateLimiter(daily_limit=100, persist=False)
-        status = rl.get_status(12345)
-        assert status["current"] == 0
-        assert status["remaining"] == 100
-        assert status["limit"] == 100
+        result = rl.check_and_increment(12345)
+        assert result["current"] == 1
+        assert result["remaining"] == 99
+        assert result["limit"] == 100
 
     def test_first_increment(self):
         """Primeiro incremento conta corretamente."""
@@ -43,10 +43,8 @@ class TestRateLimiter:
         for i in range(7):
             result = rl.check_and_increment(12345)
 
-        # 7 < 8 (80%), ainda sem warning
         assert result["warning"] is None
 
-        # 8 = 80%, deve ter warning
         result = rl.check_and_increment(12345)
         assert result["warning"] is not None
         assert "almost reached" in result["warning"]
@@ -69,26 +67,8 @@ class TestRateLimiter:
         for i in range(5):
             result = rl.check_and_increment(12345)
 
-        assert result["allowed"] is True  # Soft limit: nunca bloqueia
+        assert result["allowed"] is True
         assert result["current"] == 5
-
-    def test_get_status_sem_incrementar(self):
-        """get_status nao incrementa o contador."""
-        rl = RateLimiter(daily_limit=100, persist=False)
-        rl.check_and_increment(12345)
-
-        status = rl.get_status(12345)
-        assert status["current"] == 1  # Nao incrementou
-
-    def test_reset_user(self):
-        """reset_user zera o contador do usuario."""
-        rl = RateLimiter(daily_limit=100, persist=False)
-        rl.check_and_increment(12345)
-        rl.check_and_increment(12345)
-
-        rl.reset_user(12345)
-        status = rl.get_status(12345)
-        assert status["current"] == 0
 
     def test_multiple_users_independentes(self):
         """Usuarios diferentes tem contadores independentes."""
@@ -97,9 +77,9 @@ class TestRateLimiter:
         rl.check_and_increment(1)
         rl.check_and_increment(2)
 
-        assert rl.get_status(1)["current"] == 2
-        assert rl.get_status(2)["current"] == 1
-        assert rl.get_status(3)["current"] == 0
+        assert rl.check_and_increment(1)["current"] == 3
+        assert rl.check_and_increment(2)["current"] == 2
+        assert rl.check_and_increment(3)["current"] == 1
 
     def test_different_daily_limits(self):
         """Cada instancia pode ter limite diferente."""
