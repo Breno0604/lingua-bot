@@ -190,14 +190,13 @@ def voice_picker_keyboard(current_voice_id: str) -> InlineKeyboardMarkup:
 
 
 def speed_picker_keyboard(current_speed: float = 1.0) -> InlineKeyboardMarkup:
-    """Botoes para escolha de velocidade."""
-    keyboard = []
+    """Botoes para escolha de velocidade (todos numa linha, distribuidos uniformemente)."""
+    speed_row = []
     for speed_val in SPEED_OPTIONS:
         emoji = "\U0001f422 " if speed_val == 0.75 else ("\U0001f407 " if speed_val == 1.25 else "")
         marker = " \u25cf" if speed_val == current_speed else ""
-        keyboard.append([InlineKeyboardButton(f"{emoji}{speed_val}x{marker}", callback_data=f"set_speed_{speed_val}")])
-
-    keyboard.append([HIDE_BUTTON])
+        speed_row.append(InlineKeyboardButton(f"{emoji}{speed_val}x{marker}", callback_data=f"set_speed_{speed_val}"))
+    keyboard = [speed_row, [HIDE_BUTTON]]
     return InlineKeyboardMarkup(keyboard)
 
 
