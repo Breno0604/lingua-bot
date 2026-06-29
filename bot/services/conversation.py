@@ -5,8 +5,9 @@ Mantem o historico da conversa para cada usuario (10-15 mensagens).
 O contexto e armazenado em memoria (dicionario) e nao persiste entre restarts.
 """
 
+from __future__ import annotations
+
 from collections import deque
-from typing import Dict, List, Tuple
 
 
 class ConversationContext:
@@ -15,7 +16,7 @@ class ConversationContext:
     def __init__(self, max_turns: int = 15):
         self.max_turns = max_turns
         # Cada entrada: (role, message) onde role="user" ou "assistant"
-        self._history: deque[Tuple[str, str]] = deque(maxlen=max_turns)
+        self._history: deque[tuple[str, str]] = deque(maxlen=max_turns)
 
     def add_user_message(self, text: str) -> None:
         """Adiciona uma mensagem do usuario ao historico."""
@@ -25,7 +26,7 @@ class ConversationContext:
         """Adiciona uma resposta do bot ao historico."""
         self._history.append(("assistant", text))
 
-    def get_history(self) -> List[Tuple[str, str]]:
+    def get_history(self) -> list[tuple[str, str]]:
         """Retorna o historico completo como lista de (role, message)."""
         return list(self._history)
 
@@ -52,7 +53,7 @@ class ConversationManager:
 
     def __init__(self, max_turns: int = 15):
         self.max_turns = max_turns
-        self._contexts: Dict[int, ConversationContext] = {}
+        self._contexts: dict[int, ConversationContext] = {}
 
     def get_or_create(self, user_id: int) -> ConversationContext:
         """Retorna o contexto existente ou cria um novo para o usuario."""

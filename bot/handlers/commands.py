@@ -7,6 +7,8 @@ Comandos adicionais do bot:
   - /topic: Sugere um topico para praticar
 """
 
+from __future__ import annotations
+
 import logging
 
 from telegram import Update

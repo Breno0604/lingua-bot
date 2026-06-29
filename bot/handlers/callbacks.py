@@ -9,6 +9,8 @@ Processa cliques em botoes inline:
   - Expandir/recolher: show_more_options, hide_options
 """
 
+from __future__ import annotations
+
 import asyncio
 import logging
 
@@ -21,9 +23,9 @@ from bot.services.deepgram_tts import DEFAULT_VOICE_ID as DG_DEFAULT_VOICE_ID
 from bot.services.deepgram_tts import VOICE_MAP as DG_VOICE_MAP
 from bot.services.groq import GroqService
 from bot.services.level_manager import LevelManager
+from bot.constants import DEFAULT_SPEED_BY_LEVEL, SPEED_LABELS
 from bot.utils.formatting import TOPICS, format_topic_suggestion, get_random_topic
 from bot.utils.keyboards import (
-    DEFAULT_SPEED_BY_LEVEL,
     back_to_menu_button,
     config_menu_keyboard,
     conversation_buttons,
@@ -254,14 +256,12 @@ async def _set_level(query, context: ContextTypes.DEFAULT_TYPE, level: str) -> N
         )
         return
 
-    if not level_mgr.set_level(user_id, level):
+    if not await level_mgr.set_level(user_id, level):
         await query.edit_message_text(
             f"Invalid level: {level}. Please choose A1, A2, or B1.",
             reply_markup=back_to_menu_button(),
         )
         return
-
-    await level_mgr.persist_level(user_id)
 
     label = level_mgr.get_label(level)
     confirmation = level_mgr.get_confirmation(level)
@@ -381,13 +381,7 @@ async def _set_speed(query, context: ContextTypes.DEFAULT_TYPE, speed: float) ->
             logger.error("Erro ao persistir tts_speed: %s", e)
 
     # Indicador visual da velocidade
-    speed_labels = {
-        0.75: "\U0001f422 Very slow",
-        0.85: "Slow",
-        1.0: "Normal",
-        1.15: "Fast",
-        1.25: "\U0001f407 Very fast",
-    }
+    speed_labels = SPEED_LABELS
 
     # Se veio do config flow, apenas atualiza o teclado (permanece no speed_picker)
     screen_type = context.user_data.get("screen_type")

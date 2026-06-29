@@ -9,19 +9,13 @@ Todos os teclados agora suportam compressao via collapse_keyboard:
 - expanded=True: mostra todos os botoes + "\u25c0 Hide Options"
 """
 
+from __future__ import annotations
+
 import asyncio
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
-# Opcoes de velocidade de audio disponiveis
-SPEED_OPTIONS = [0.75, 0.85, 1.0, 1.15, 1.25]
-
-# Velocidade padrao por nivel de proficiencia
-DEFAULT_SPEED_BY_LEVEL = {
-    "A1": 0.85,
-    "A2": 0.9,
-    "B1": 1.0,
-}
+from bot.constants import DEFAULT_SPEED_BY_LEVEL, SPEED_OPTIONS
 
 def _pad(text: str) -> str:
     """Adiciona 5 espacos nas bordas para aumentar a largura do botao."""

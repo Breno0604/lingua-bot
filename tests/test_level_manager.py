@@ -1,5 +1,7 @@
 """Tests for LevelManager service."""
 
+from __future__ import annotations
+
 import pytest
 from bot.services.level_manager import LevelManager
 
@@ -38,15 +40,17 @@ class TestLevelManagerGetLevel:
         mgr = LevelManager(default_level="B1")
         assert mgr.get_level(456) == "B1"
 
-    def test_returns_set_level(self):
+    @pytest.mark.asyncio
+    async def test_returns_set_level(self):
         mgr = LevelManager()
-        mgr.set_level(789, "B1")
+        await mgr.set_level(789, "B1")
         assert mgr.get_level(789) == "B1"
 
-    def test_multiple_users_independent(self):
+    @pytest.mark.asyncio
+    async def test_multiple_users_independent(self):
         mgr = LevelManager()
-        mgr.set_level(1, "A2")
-        mgr.set_level(2, "B1")
+        await mgr.set_level(1, "A2")
+        await mgr.set_level(2, "B1")
         assert mgr.get_level(1) == "A2"
         assert mgr.get_level(2) == "B1"
         assert mgr.get_level(3) == "A1"  # default
@@ -55,30 +59,35 @@ class TestLevelManagerGetLevel:
 class TestLevelManagerSetLevel:
     """Testes de definicao do nivel."""
 
-    def test_set_valid_level(self):
+    @pytest.mark.asyncio
+    async def test_set_valid_level(self):
         mgr = LevelManager()
-        assert mgr.set_level(1, "A2") is True
+        assert await mgr.set_level(1, "A2") is True
         assert mgr.get_level(1) == "A2"
 
-    def test_set_all_valid_levels(self):
+    @pytest.mark.asyncio
+    async def test_set_all_valid_levels(self):
         mgr = LevelManager()
         for level in ["A1", "A2", "B1"]:
-            assert mgr.set_level(1, level) is True
+            assert await mgr.set_level(1, level) is True
             assert mgr.get_level(1) == level
 
-    def test_set_invalid_level_returns_false(self):
+    @pytest.mark.asyncio
+    async def test_set_invalid_level_returns_false(self):
         mgr = LevelManager()
-        assert mgr.set_level(1, "C1") is False
+        assert await mgr.set_level(1, "C1") is False
         assert mgr.get_level(1) == "A1"  # nao mudou
 
-    def test_set_lowercase_level(self):
+    @pytest.mark.asyncio
+    async def test_set_lowercase_level(self):
         mgr = LevelManager()
-        assert mgr.set_level(1, "a1") is False  # case sensitive
+        assert await mgr.set_level(1, "a1") is False  # case sensitive
         assert mgr.get_level(1) == "A1"
 
-    def test_set_empty_level(self):
+    @pytest.mark.asyncio
+    async def test_set_empty_level(self):
         mgr = LevelManager()
-        assert mgr.set_level(1, "") is False
+        assert await mgr.set_level(1, "") is False
         assert mgr.get_level(1) == "A1"
 
 
@@ -109,12 +118,14 @@ class TestLevelManagerHelpers:
         mgr = LevelManager()
         assert mgr.has_level(999) is False
 
-    def test_has_level_true_after_set(self):
+    @pytest.mark.asyncio
+    async def test_has_level_true_after_set(self):
         mgr = LevelManager()
-        mgr.set_level(999, "A2")
+        await mgr.set_level(999, "A2")
         assert mgr.has_level(999) is True
 
-    def test_has_level_after_reset(self):
+    @pytest.mark.asyncio
+    async def test_has_level_after_reset(self):
         mgr = LevelManager()
-        mgr.set_level(1, "B1")
+        await mgr.set_level(1, "B1")
         assert mgr.has_level(1) is True

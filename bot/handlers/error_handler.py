@@ -3,6 +3,8 @@ LinguaBot --- Error Handler
 Tratamento global de erros nao tratados.
 """
 
+from __future__ import annotations
+
 import logging
 import traceback
 

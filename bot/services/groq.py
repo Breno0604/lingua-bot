@@ -8,9 +8,10 @@ Fornece:
   - System prompt adaptativo por nivel (A1, A2, B1)
 """
 
+from __future__ import annotations
+
 import asyncio
 import logging
-from typing import Optional
 
 from groq import Groq as GroqClient
 from groq.types.chat import ChatCompletion
@@ -213,7 +214,7 @@ class GroqService:
         self.model = config.groq_model
         self.max_retries = 2
         self.retry_delay = 2
-        self._client: Optional[GroqClient] = None
+        self._client: GroqClient | None = None
 
     def _get_client(self) -> GroqClient:
         """Retorna (ou cria) o cliente Groq."""
@@ -226,7 +227,7 @@ class GroqService:
         conversation_history: str,
         user_message: str,
         level: str = "A1",
-    ) -> Optional[str]:
+    ) -> str | None:
         """Gera uma resposta do Groq com base no historico e nivel do usuario.
 
         Args:

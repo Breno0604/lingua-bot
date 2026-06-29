@@ -4,6 +4,8 @@ Tests para bot.services.groq
 Testa o GroqService com mocks para nao chamar a API real.
 """
 
+from __future__ import annotations
+
 from unittest.mock import MagicMock, patch
 
 import pytest

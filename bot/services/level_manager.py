@@ -10,7 +10,7 @@ quando disponivel, permitindo persistencia entre restarts.
 Se nao houver banco configurado, funciona apenas em RAM (fallback).
 """
 
-from typing import Dict, Optional
+from __future__ import annotations
 
 from bot.database import BaseDatabase
 
@@ -41,11 +41,11 @@ class LevelManager:
         ),
     }
 
-    def __init__(self, default_level: str = "A1", db: Optional[BaseDatabase] = None):
+    def __init__(self, default_level: str = "A1", db: BaseDatabase | None = None):
         self.default_level = default_level
         self.db = db
         # Cache em memoria (evita ler do banco a cada chamada)
-        self._levels: Dict[int, str] = {}
+        self._levels: dict[int, str] = {}
 
     async def load_level(self, user_id: int) -> str:
         """Carrega o nivel do banco e atualiza o cache.
@@ -68,12 +68,8 @@ class LevelManager:
         """Retorna o nivel do usuario (cache primeiro, depois default)."""
         return self._levels.get(user_id, self.default_level)
 
-    def set_level(self, user_id: int, level: str) -> bool:
-        """Define o nivel do usuario em cache.
-
-        NOTA: Este metodo e SYNC para compatibilidade com codigo
-        existente. Para persistir no banco, chave persist_level()
-        separadamente.
+    async def set_level(self, user_id: int, level: str) -> bool:
+        """Define o nivel do usuario e persiste no banco.
 
         Returns:
             False se nivel invalido, True se sucesso.
@@ -81,21 +77,14 @@ class LevelManager:
         if level not in self.VALID_LEVELS:
             return False
         self._levels[user_id] = level
+        if self.db:
+            try:
+                await self.db.set_user_preferences(user_id, level=level)
+            except Exception as e:
+                __import__("logging").getLogger(__name__).error(
+                    "Erro ao persistir nivel para user %d: %s", user_id, e
+                )
         return True
-
-    async def persist_level(self, user_id: int) -> None:
-        """Persiste o nivel atual do usuario no banco de dados."""
-        if not self.db:
-            return
-        level = self._levels.get(user_id)
-        if not level:
-            return
-        try:
-            await self.db.set_user_preferences(user_id, level=level)
-        except Exception as e:
-            __import__("logging").getLogger(__name__).error(
-                "Erro ao persistir nivel para user %d: %s", user_id, e
-            )
 
     def get_label(self, level: str) -> str:
         """Retorna o label amigavel para um nivel."""

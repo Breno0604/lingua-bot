@@ -7,6 +7,8 @@ Comando /voice:
   - Confirma a mudanca e aplica nas proximas respostas de audio
 """
 
+from __future__ import annotations
+
 import logging
 
 from telegram import Update
@@ -14,7 +16,8 @@ from telegram.ext import ContextTypes
 
 from bot.services.deepgram_tts import VOICE_MAP, DEFAULT_VOICE_ID
 from bot.utils.db_helpers import load_audio_prefs_from_db
-from bot.utils.keyboards import DEFAULT_SPEED_BY_LEVEL, voice_selection_keyboard
+from bot.constants import DEFAULT_SPEED_BY_LEVEL
+from bot.utils.keyboards import voice_selection_keyboard
 
 logger = logging.getLogger(__name__)
 

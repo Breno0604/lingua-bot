@@ -11,8 +11,9 @@ Fluxo:
   4. Se falhar, retorna None (quem chama deve usar fallback)
 """
 
+from __future__ import annotations
+
 import logging
-from typing import Optional
 
 from deepgram import DeepgramClient
 
@@ -48,7 +49,7 @@ class DeepgramTTSService:
     def __init__(self, api_key: str, audio_cache: AudioCache = None):
         self.api_key = api_key
         self.cache = audio_cache or AudioCache()
-        self._client: Optional[DeepgramClient] = None
+        self._client: DeepgramClient | None = None
         self.max_text_chars = 150  # Deepgram Aura aceita textos mais longos que ElevenLabs
 
     def _get_client(self) -> DeepgramClient:
@@ -56,7 +57,7 @@ class DeepgramTTSService:
             self._client = DeepgramClient(api_key=self.api_key)
         return self._client
 
-    async def generate_speech(self, text: str, voice_id: str = DEFAULT_VOICE_ID, speed: float = 1.0) -> Optional[bytes]:
+    async def generate_speech(self, text: str, voice_id: str = DEFAULT_VOICE_ID, speed: float = 1.0) -> bytes | None:
         """Gera audio a partir do texto usando Deepgram Aura.
 
         Args:
@@ -91,7 +92,7 @@ class DeepgramTTSService:
         logger.error("Deepgram Aura TTS falhou para voz: %s", voice_id)
         return None
 
-    async def _try_deepgram(self, text: str, voice_id: str = DEFAULT_VOICE_ID, speed: float = 1.0) -> Optional[bytes]:
+    async def _try_deepgram(self, text: str, voice_id: str = DEFAULT_VOICE_ID, speed: float = 1.0) -> bytes | None:
         """Tenta gerar audio com Deepgram Aura.
 
         Se o parametro speed falhar (API nao suporta), tenta sem speed.

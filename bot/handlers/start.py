@@ -3,6 +3,8 @@ LinguaBot --- Start Handler
 Mensagem de boas-vindas com menu inicial e escolha de nivel.
 """
 
+from __future__ import annotations
+
 from telegram import Update
 from telegram.ext import ContextTypes
 

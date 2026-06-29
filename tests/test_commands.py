@@ -4,6 +4,8 @@ Tests para bot.handlers.commands
 Testa os comandos /reset, /vocab e /topic com mocks do Telegram.
 """
 
+from __future__ import annotations
+
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 

@@ -4,8 +4,9 @@ LinguaBot --- Deepgram STT Client
 Transcreve audio do usuario para texto usando Deepgram STT.
 """
 
+from __future__ import annotations
+
 import logging
-from typing import Optional
 
 from deepgram import DeepgramClient
 
@@ -17,14 +18,14 @@ class DeepgramService:
 
     def __init__(self, api_key: str):
         self.api_key = api_key
-        self._client: Optional[DeepgramClient] = None
+        self._client: DeepgramClient | None = None
 
     def _get_client(self) -> DeepgramClient:
         if self._client is None:
             self._client = DeepgramClient(api_key=self.api_key)
         return self._client
 
-    async def transcribe_audio(self, audio_bytes: bytes) -> Optional[str]:
+    async def transcribe_audio(self, audio_bytes: bytes) -> str | None:
         """Transcreve audio do usuario usando Deepgram STT (nova-2)."""
         try:
             client = self._get_client()

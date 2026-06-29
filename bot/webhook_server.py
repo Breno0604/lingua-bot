@@ -17,6 +17,8 @@ Modo de uso:
   Localmente, use uma porta fixa (ex: 8000).
 """
 
+from __future__ import annotations
+
 import logging
 import os
 

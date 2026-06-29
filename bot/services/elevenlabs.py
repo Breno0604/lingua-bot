@@ -10,8 +10,9 @@ Inclui:
   - Modelo unico: Rachel (warm and clear)
 """
 
+from __future__ import annotations
+
 import logging
-from typing import Optional
 
 from elevenlabs.client import ElevenLabs as ElevenLabsClient
 
@@ -37,7 +38,7 @@ class ElevenLabsService:
     def __init__(self, api_key: str):
         self.api_key = api_key
         self.cache = AudioCache()
-        self._client: Optional[ElevenLabsClient] = None
+        self._client: ElevenLabsClient | None = None
         self.monthly_chars_used = 0
         self.max_chars = MAX_CHARS
         self.max_text_chars = 100
@@ -47,7 +48,7 @@ class ElevenLabsService:
             self._client = ElevenLabsClient(api_key=self.api_key)
         return self._client
 
-    async def generate_speech(self, text: str, speed: float = 1.0) -> Optional[bytes]:
+    async def generate_speech(self, text: str, speed: float = 1.0) -> bytes | None:
         """Gera audio com ElevenLabs (voz Rachel).
 
         Fallback do Deepgram Aura. Usa cache e respeita limite mensal.
@@ -87,7 +88,7 @@ class ElevenLabsService:
 
         return None
 
-    async def _try_elevenlabs(self, text: str, speed: float = 1.0) -> Optional[bytes]:
+    async def _try_elevenlabs(self, text: str, speed: float = 1.0) -> bytes | None:
         """Tenta gerar audio com ElevenLabs Rachel.
 
         Suporta parametro speed se o modelo aceitar.

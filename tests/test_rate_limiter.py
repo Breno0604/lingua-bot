@@ -2,6 +2,8 @@
 Tests para bot.utils.rate_limiter
 """
 
+from __future__ import annotations
+
 from unittest.mock import patch
 
 import pytest

@@ -8,8 +8,9 @@ regerar o mesmo audio multiplas vezes.
 E um cache volatil — perdido ao restart do bot.
 """
 
+from __future__ import annotations
+
 import hashlib
-from typing import Optional
 
 
 class AudioCache:
@@ -22,7 +23,7 @@ class AudioCache:
         """Gera hash MD5 do texto para usar como chave."""
         return hashlib.md5(text.encode("utf-8")).hexdigest()
 
-    def get(self, text: str) -> Optional[bytes]:
+    def get(self, text: str) -> bytes | None:
         """Retorna audio em cache, ou None se nao existir."""
         key = self._hash(text)
         return self._cache.get(key)

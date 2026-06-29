@@ -7,6 +7,8 @@ Comando /level:
   - Confirma a mudanca e informa como a resposta sera adaptada
 """
 
+from __future__ import annotations
+
 import logging
 
 from telegram import Update

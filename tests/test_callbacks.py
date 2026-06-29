@@ -6,6 +6,8 @@ Navegacao: menu, how_it_works, start_conversation, show_vocab, show_topics
 Acao: more_examples, explain_word, practice_this
 """
 
+from __future__ import annotations
+
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 

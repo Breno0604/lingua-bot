@@ -9,8 +9,9 @@ Centraliza a logica de fallback e resolucao de velocidade,
 eliminando a duplicacao entre audio.py e message.py.
 """
 
+from __future__ import annotations
+
 import logging
-from typing import Optional
 
 from bot.services.deepgram_tts import DEFAULT_VOICE_ID, DeepgramTTSService
 from bot.services.elevenlabs import ElevenLabsService
@@ -30,8 +31,8 @@ class TTSOrchestrator:
 
     def __init__(
         self,
-        deepgram_tts: Optional[DeepgramTTSService] = None,
-        elevenlabs: Optional[ElevenLabsService] = None,
+        deepgram_tts: DeepgramTTSService | None = None,
+        elevenlabs: ElevenLabsService | None = None,
     ):
         self.deepgram_tts = deepgram_tts
         self.elevenlabs = elevenlabs
@@ -41,7 +42,7 @@ class TTSOrchestrator:
         text: str,
         voice_id: str = DEFAULT_VOICE_ID,
         speed: float = 1.0,
-    ) -> Optional[bytes]:
+    ) -> bytes | None:
         """Gera audio com fallback em cascata: Deepgram -> ElevenLabs -> None.
 
         Args:

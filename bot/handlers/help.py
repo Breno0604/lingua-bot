@@ -3,6 +3,8 @@ LinguaBot --- Help Handler
 Lista de comandos disponiveis e dicas de uso.
 """
 
+from __future__ import annotations
+
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 

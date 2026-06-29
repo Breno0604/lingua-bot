@@ -10,11 +10,13 @@ Implementacao:
   - Persistencia opcional em arquivo JSON
 """
 
+from __future__ import annotations
+
 import json
 import logging
 import os
+import threading
 from datetime import datetime, timezone
-from typing import Dict, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -28,8 +30,9 @@ class RateLimiter:
     def __init__(self, daily_limit: int = 100, persist: bool = True):
         self.daily_limit = daily_limit
         self.persist = persist
+        self._lock = threading.Lock()
         # {user_id: (date_str, count)}
-        self._usage: Dict[int, Tuple[str, int]] = {}
+        self._usage: dict[int, tuple[str, int]] = {}
         self._load()
 
     def _get_today(self) -> str:
@@ -54,9 +57,10 @@ class RateLimiter:
         if not self.persist:
             return
         try:
-            os.makedirs(DATA_DIR, exist_ok=True)
-            with open(PERSISTENCE_FILE, "w", encoding="utf-8") as f:
-                json.dump(self._usage, f, ensure_ascii=False, indent=2)
+            with self._lock:
+                os.makedirs(DATA_DIR, exist_ok=True)
+                with open(PERSISTENCE_FILE, "w", encoding="utf-8") as f:
+                    json.dump(self._usage.copy(), f, ensure_ascii=False, indent=2)
         except Exception as e:
             logger.warning("Erro ao salvar rate limits: %s", e)
 
@@ -74,15 +78,17 @@ class RateLimiter:
         """
         today = self._get_today()
 
-        # Reseta se for um novo dia
-        if user_id in self._usage and self._usage[user_id][0] != today:
-            self._usage[user_id] = (today, 0)
-        elif user_id not in self._usage:
-            self._usage[user_id] = (today, 0)
+        with self._lock:
+            # Reseta se for um novo dia
+            if user_id in self._usage and self._usage[user_id][0] != today:
+                self._usage[user_id] = (today, 0)
+            elif user_id not in self._usage:
+                self._usage[user_id] = (today, 0)
 
-        date_str, count = self._usage[user_id]
-        count += 1
-        self._usage[user_id] = (today, count)
+            date_str, count = self._usage[user_id]
+            count += 1
+            self._usage[user_id] = (today, count)
+
         self._save()
 
         remaining = self.daily_limit - count

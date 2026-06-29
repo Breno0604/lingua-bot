@@ -7,13 +7,13 @@ Utilitarios para formatacao de mensagens:
   - Formatacao de data/hora
 """
 
-from typing import List, Optional
+from __future__ import annotations
 
 from bot.database import VocabEntry
 
 
 def format_vocab_list(
-    entries: List[VocabEntry],
+    entries: list[VocabEntry],
     total_count: int,
     page: int = 1,
     page_size: int = 10,
@@ -59,7 +59,7 @@ def format_vocab_list(
     return "\n".join(lines)
 
 
-def split_long_message(text: str, max_length: int = 4000) -> List[str]:
+def split_long_message(text: str, max_length: int = 4000) -> list[str]:
     """
     Quebra uma mensagem longa em partes menores.
 
@@ -132,7 +132,7 @@ TOPICS = [
 ]
 
 
-def get_random_topic(exclude: Optional[str] = None) -> tuple:
+def get_random_topic(exclude: str | None = None) -> tuple:
     """Retorna um topico aleatorio da lista fixa, opcionalmente excluindo um."""
     import random
 

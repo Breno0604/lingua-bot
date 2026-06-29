@@ -2,6 +2,8 @@
 Tests para bot.services.conversation
 """
 
+from __future__ import annotations
+
 import pytest
 from bot.services.conversation import ConversationContext, ConversationManager
 

@@ -10,6 +10,8 @@ Testa o fluxo completo de processamento de audio:
   6. Salvamento de vocabulario
 """
 
+from __future__ import annotations
+
 import pytest
 from unittest.mock import AsyncMock, MagicMock
 

@@ -4,6 +4,8 @@ LinguaBot --- Shared Test Fixtures
 Fixtures e mocks compartilhados entre todos os testes.
 """
 
+from __future__ import annotations
+
 import sys
 import os
 from unittest.mock import AsyncMock, MagicMock, patch

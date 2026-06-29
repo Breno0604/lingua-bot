@@ -6,6 +6,8 @@ aplica rate limiter, extrai vocabulario e envia a resposta com botoes.
 Gera audio com Deepgram Aura (primario) + ElevenLabs (fallback).
 """
 
+from __future__ import annotations
+
 import logging
 
 from telegram import Update
@@ -18,7 +20,8 @@ from bot.services.groq import GroqService
 from bot.services.level_manager import LevelManager
 from bot.services.tts_orchestrator import TTSOrchestrator
 from bot.utils.db_helpers import extract_vocab_from_reply, load_audio_prefs_from_db, save_vocab_entries
-from bot.utils.keyboards import DEFAULT_SPEED_BY_LEVEL, cleanup_old_buttons, conversation_buttons
+from bot.constants import DEFAULT_SPEED_BY_LEVEL
+from bot.utils.keyboards import cleanup_old_buttons, conversation_buttons
 from bot.utils.rate_limiter import RateLimiter
 
 logger = logging.getLogger(__name__)

@@ -6,6 +6,8 @@ Modos de operacao:
   - webhook (Render/producao): uvicorn bot.webhook_server:app --host 0.0.0.0 --port $PORT
 """
 
+from __future__ import annotations
+
 import logging
 import sys
 
