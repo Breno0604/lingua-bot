@@ -2,6 +2,24 @@
 
 All notable changes to LinguaBot will be documented in this file.
 
+## [Unreleased]
+
+### Added
+- `ResponseValidator` service for post-generation response validation
+- Level-specific parameters (temperature, top_p, max_tokens) for A1, A2, B1
+- Frequency and presence penalties to reduce repetition
+- Few-shot examples in system prompts
+- Anti-repetition structure rules
+- Data files: `top_800_words.txt`, `idioms_to_avoid.txt`
+
+### Changed
+- Improved system prompts with better correction rules
+- Response validation integrated into GroqService with retry logic
+
+### Fixed
+- Responses now stay within level-appropriate word limits
+- Vocabulary validation for A1 level (800 most common words)
+
 ## [1.0.0] - 2026-06-28
 
 ### Added

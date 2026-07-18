@@ -31,6 +31,15 @@ O **LinguaBot** e um bot do Telegram que atua como professor particular de ingle
 - Sugere **15 topicos** para praticar conversacao
 - **Rate limiter** suave: 100 mensagens/dia com avisos
 
+### Quality Improvements
+
+The bot now features:
+- **Level-specific parameters**: Temperature, top_p, and max_tokens adjusted per level (A1/A2/B1)
+- **Post-generation validation**: Responses are validated for length, vocabulary, and structure
+- **Smart retry**: If a response doesn't meet quality standards, the bot retries with adjusted parameters
+- **Few-shot examples**: System prompts include concrete conversation examples
+- **Anti-repetition rules**: Bot varies sentence structure and openings
+
 ---
 
 ## 🛠 Stack Tecnologica
