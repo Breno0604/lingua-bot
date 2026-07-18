@@ -89,7 +89,7 @@ class TestGroqService:
         mock_groq_client.return_value = mock_instance
 
         mock_choice = MagicMock()
-        mock_choice.message.content = "Great question!"
+        mock_choice.message.content = "I do not like it"
         mock_response = MagicMock()
         mock_response.choices = [mock_choice]
         mock_instance.chat.completions.create.return_value = mock_response
@@ -101,7 +101,7 @@ class TestGroqService:
         import asyncio
         result = asyncio.run(service.generate_reply(history, "I'm fine!"))
 
-        assert result == "Great question!"
+        assert result == "I do not like it"
 
         # Verifica mensagens: system + historico + user_message
         call_args = mock_instance.chat.completions.create.call_args
@@ -165,7 +165,7 @@ class TestGroqService:
             Exception("API Error 1"),
             Exception("API Error 2"),
             MagicMock(
-                choices=[MagicMock(message=MagicMock(content="Success!"))]
+                choices=[MagicMock(message=MagicMock(content="I like it!"))]
             ),
         ]
 
@@ -175,7 +175,7 @@ class TestGroqService:
 
         import asyncio
         result = asyncio.run(service.generate_reply("", "Hello"))
-        assert result == "Success!"
+        assert result == "I like it!"
         assert mock_instance.chat.completions.create.call_count == 3
 
     @patch("bot.services.groq.GroqClient")
@@ -316,3 +316,55 @@ class TestGroqService:
         kwargs = call_args[1]
         assert kwargs["frequency_penalty"] == 0.3
         assert kwargs["presence_penalty"] == 0.2
+
+    @patch("bot.services.groq.GroqClient")
+    def test_generate_reply_validates_response(self, mock_groq_client):
+        """generate_reply valida resposta e faz retry se inválida."""
+        mock_instance = MagicMock()
+        mock_groq_client.return_value = mock_instance
+
+        # Primeira resposta: longa demais (inválida)
+        long_reply = " ".join(["word"] * 50)
+        # Segunda resposta: curta (válida)
+        short_reply = "Great! I like pizza."
+
+        mock_instance.chat.completions.create.side_effect = [
+            MagicMock(choices=[MagicMock(message=MagicMock(content=long_reply))]),
+            MagicMock(choices=[MagicMock(message=MagicMock(content=short_reply))]),
+        ]
+
+        config = MockConfig()
+        service = GroqService(config)
+
+        import asyncio
+        result = asyncio.run(service.generate_reply("", "Hello", level="A1"))
+
+        # Deve retornar a segunda resposta (válida)
+        assert result == short_reply
+        # Deve ter chamado a API 2 vezes (original + retry)
+        assert mock_instance.chat.completions.create.call_count == 2
+
+    @patch("bot.services.groq.GroqClient")
+    def test_generate_reply_uses_original_if_retry_fails(self, mock_groq_client):
+        """generate_reply usa resposta original se retry também falhar."""
+        mock_instance = MagicMock()
+        mock_groq_client.return_value = mock_instance
+
+        # Ambas respostas longas (inválidas)
+        long_reply1 = " ".join(["word"] * 50)
+        long_reply2 = " ".join(["word"] * 55)
+
+        mock_instance.chat.completions.create.side_effect = [
+            MagicMock(choices=[MagicMock(message=MagicMock(content=long_reply1))]),
+            MagicMock(choices=[MagicMock(message=MagicMock(content=long_reply2))]),
+        ]
+
+        config = MockConfig()
+        service = GroqService(config)
+
+        import asyncio
+        result = asyncio.run(service.generate_reply("", "Hello", level="A1"))
+
+        # Deve retornar a primeira resposta (original)
+        assert result == long_reply1
+        assert mock_instance.chat.completions.create.call_count == 2

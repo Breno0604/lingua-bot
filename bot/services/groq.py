@@ -17,6 +17,7 @@ from groq import Groq as GroqClient
 from groq.types.chat import ChatCompletion
 
 from bot.config import Config
+from bot.services.response_validator import ResponseValidator
 
 logger = logging.getLogger(__name__)
 
@@ -274,6 +275,7 @@ class GroqService:
         self.max_retries = 2
         self.retry_delay = 2
         self._client: GroqClient | None = None
+        self._validator = ResponseValidator()
 
     def _get_client(self) -> GroqClient:
         """Retorna (ou cria) o cliente Groq."""
@@ -287,18 +289,10 @@ class GroqService:
         user_message: str,
         level: str = "A1",
     ) -> str | None:
-        """Gera uma resposta do Groq com base no historico e nivel do usuario.
-
-        Args:
-            conversation_history: Historico formatado da conversa.
-            user_message: Mensagem atual do usuario.
-            level: Nivel do usuario (A1, A2, B1). Usado para selecionar
-                   o system prompt apropriado.
-
-        Returns:
-            Texto da resposta, ou None se todas as tentativas falharem.
-        """
+        """Gera uma resposta do Groq com validação pós-geração."""
         messages = self._build_messages(conversation_history, user_message, level)
+        original_reply: str | None = None
+        has_retried_validation = False
 
         for attempt in range(1, self.max_retries + 2):
             try:
@@ -312,7 +306,42 @@ class GroqService:
                 if response and response.choices:
                     content = response.choices[0].message.content
                     if content:
-                        return content.strip()
+                        reply = content.strip()
+
+                        if original_reply is None:
+                            original_reply = reply
+
+                        # Validação pós-geração
+                        validation = self._validator.validate(reply, level, user_message)
+
+                        if validation.is_valid:
+                            return reply
+
+                        # Score >= 0.6 mas não é totalmente válido: aceitável
+                        if validation.score >= 0.6:
+                            return reply
+
+                        # Score < 0.6: retry com nota se ainda não retryamos
+                        if not has_retried_validation:
+                            has_retried_validation = True
+                            logger.info(
+                                "Resposta inválida (score=%.2f, issues=%s), retrying...",
+                                validation.score,
+                                validation.issues,
+                            )
+                            issues_text = ", ".join(validation.issues)
+                            retry_message = (
+                                f"{user_message}\n\n"
+                                f"[Note: Your previous response had issues: {issues_text}. "
+                                f"Please fix these and respond again.]"
+                            )
+                            messages = self._build_messages(
+                                conversation_history, retry_message, level
+                            )
+                            continue
+
+                        # Já retryamos, retorna original
+                        return original_reply
                     else:
                         logger.warning("Groq retornou resposta vazia")
                         return None
