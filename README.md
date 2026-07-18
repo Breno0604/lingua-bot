@@ -53,7 +53,7 @@ The bot now features:
 | **Banco (dev)** | SQLite |
 | **Banco (prod)** | Supabase (PostgreSQL) |
 | **Hospedagem** | Render (Web Service, free tier) |
-| **Testes** | pytest + mocks (206 testes) |
+| **Testes** | pytest + mocks (226+ testes) |
 
 ---
 
@@ -375,7 +375,8 @@ lingua-bot/
 │   ├── services/
 │   │   ├── __init__.py
 │   │   ├── groq.py           # Integracao com Groq API
-│   │   └── conversation.py   # Gerenciamento de contexto
+│   │   ├── conversation.py   # Gerenciamento de contexto
+│   │   └── response_validator.py  # Validacao pos-geracao
 │   └── utils/
 │       ├── __init__.py
 │       ├── formatting.py     # Formatacao de texto, topicos, vocabulario
@@ -387,19 +388,20 @@ lingua-bot/
     ├── test_conversation.py   # Testes do ConversationManager (11 testes)
     ├── test_rate_limiter.py   # Testes do RateLimiter (10 testes)
     ├── test_formatting.py     # Testes de formatacao e extracao (16 testes)
-    ├── test_groq.py           # Testes do GroqService mockado (11 testes)
+    ├── test_groq.py           # Testes do GroqService mockado (16 testes)
     ├── test_commands.py       # Testes de /reset, /vocab, /topic (6 testes)
     ├── test_callbacks.py      # Testes de botoes inline (31 testes)
     ├── test_message.py        # Testes do message handler (24 testes)
     ├── test_database.py       # Testes do SQLite e Supabase (21 testes)
-    └── test_webhook_server.py # Testes do servidor webhook (8 testes)
+    ├── test_webhook_server.py # Testes do servidor webhook (8 testes)
+    └── test_integration.py   # Testes de integracao do ResponseValidator
 ```
 
 ---
 
 ## 🧪 Testes
 
-O projeto possui **206 testes unitarios** com pytest:
+O projeto possui **226+ testes unitarios** com pytest:
 
 ```bash
 # Rodar todos os testes

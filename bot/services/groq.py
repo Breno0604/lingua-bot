@@ -276,6 +276,7 @@ class GroqService:
         self.retry_delay = 2
         self._client: GroqClient | None = None
         self._validator = ResponseValidator()
+        self._retry_temperature: float | None = None
 
     def _get_client(self) -> GroqClient:
         """Retorna (ou cria) o cliente Groq."""
@@ -290,6 +291,7 @@ class GroqService:
         level: str = "A1",
     ) -> str | None:
         """Gera uma resposta do Groq com validação pós-geração."""
+        self._retry_temperature = None
         messages = self._build_messages(conversation_history, user_message, level)
         original_reply: str | None = None
         has_retried_validation = False
@@ -338,6 +340,9 @@ class GroqService:
                             messages = self._build_messages(
                                 conversation_history, retry_message, level
                             )
+                            # Reduzir temperatura no retry
+                            params = LEVEL_PARAMS.get(level, LEVEL_PARAMS["A1"])
+                            self._retry_temperature = params["temperature"] - 0.1
                             continue
 
                         # Já retryamos, retorna original
@@ -364,15 +369,17 @@ class GroqService:
                     logger.error("Todas as tentativas de chamar Groq falharam")
                     return None
 
+        self._retry_temperature = None
         return None
 
     def _sync_generate(self, messages: list[dict], level: str = "A1") -> ChatCompletion:
         client = self._get_client()
         params = LEVEL_PARAMS.get(level, LEVEL_PARAMS["A1"])
+        temperature = self._retry_temperature if self._retry_temperature is not None else params["temperature"]
         response = client.chat.completions.create(
             model=self.model,
             messages=messages,
-            temperature=params["temperature"],
+            temperature=temperature,
             top_p=params["top_p"],
             max_tokens=params["max_tokens"],
             frequency_penalty=FREQUENCY_PENALTY,
