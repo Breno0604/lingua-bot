@@ -71,8 +71,11 @@ class TestGroqService:
         assert call_args is not None
         kwargs = call_args[1]
         assert kwargs["model"] == "test-model"
-        assert kwargs["temperature"] == 0.7
-        assert kwargs["max_tokens"] == 400
+        assert kwargs["temperature"] == 0.5
+        assert kwargs["top_p"] == 0.9
+        assert kwargs["max_tokens"] == 200
+        assert kwargs["frequency_penalty"] == 0.3
+        assert kwargs["presence_penalty"] == 0.2
         # Deve ter system prompt + user_message
         assert len(kwargs["messages"]) == 2
         assert kwargs["messages"][0]["role"] == "system"
@@ -218,3 +221,98 @@ class TestGroqService:
         # user_message sempre adicionado
         assert messages[3]["role"] == "user"
         assert messages[3]["content"] == "How are you?"
+
+    @patch("bot.services.groq.GroqClient")
+    def test_generate_reply_a1_parameters(self, mock_groq_client):
+        """generate_reply usa parâmetros corretos para A1."""
+        mock_instance = MagicMock()
+        mock_groq_client.return_value = mock_instance
+
+        mock_choice = MagicMock()
+        mock_choice.message.content = "Hello!"
+        mock_response = MagicMock()
+        mock_response.choices = [mock_choice]
+        mock_instance.chat.completions.create.return_value = mock_response
+
+        config = MockConfig()
+        service = GroqService(config)
+
+        import asyncio
+        asyncio.run(service.generate_reply("", "Hello", level="A1"))
+
+        call_args = mock_instance.chat.completions.create.call_args
+        kwargs = call_args[1]
+        assert kwargs["temperature"] == 0.5
+        assert kwargs["top_p"] == 0.9
+        assert kwargs["max_tokens"] == 200
+
+    @patch("bot.services.groq.GroqClient")
+    def test_generate_reply_a2_parameters(self, mock_groq_client):
+        """generate_reply usa parâmetros corretos para A2."""
+        mock_instance = MagicMock()
+        mock_groq_client.return_value = mock_instance
+
+        mock_choice = MagicMock()
+        mock_choice.message.content = "Hello!"
+        mock_response = MagicMock()
+        mock_response.choices = [mock_choice]
+        mock_instance.chat.completions.create.return_value = mock_response
+
+        config = MockConfig()
+        service = GroqService(config)
+
+        import asyncio
+        asyncio.run(service.generate_reply("", "Hello", level="A2"))
+
+        call_args = mock_instance.chat.completions.create.call_args
+        kwargs = call_args[1]
+        assert kwargs["temperature"] == 0.7
+        assert kwargs["top_p"] == 0.95
+        assert kwargs["max_tokens"] == 300
+
+    @patch("bot.services.groq.GroqClient")
+    def test_generate_reply_b1_parameters(self, mock_groq_client):
+        """generate_reply usa parâmetros corretos para B1."""
+        mock_instance = MagicMock()
+        mock_groq_client.return_value = mock_instance
+
+        mock_choice = MagicMock()
+        mock_choice.message.content = "Hello!"
+        mock_response = MagicMock()
+        mock_response.choices = [mock_choice]
+        mock_instance.chat.completions.create.return_value = mock_response
+
+        config = MockConfig()
+        service = GroqService(config)
+
+        import asyncio
+        asyncio.run(service.generate_reply("", "Hello", level="B1"))
+
+        call_args = mock_instance.chat.completions.create.call_args
+        kwargs = call_args[1]
+        assert kwargs["temperature"] == 0.8
+        assert kwargs["top_p"] == 0.95
+        assert kwargs["max_tokens"] == 400
+
+    @patch("bot.services.groq.GroqClient")
+    def test_generate_reply_includes_penalties(self, mock_groq_client):
+        """generate_reply inclui frequency_penalty e presence_penalty."""
+        mock_instance = MagicMock()
+        mock_groq_client.return_value = mock_instance
+
+        mock_choice = MagicMock()
+        mock_choice.message.content = "Hello!"
+        mock_response = MagicMock()
+        mock_response.choices = [mock_choice]
+        mock_instance.chat.completions.create.return_value = mock_response
+
+        config = MockConfig()
+        service = GroqService(config)
+
+        import asyncio
+        asyncio.run(service.generate_reply("", "Hello", level="A1"))
+
+        call_args = mock_instance.chat.completions.create.call_args
+        kwargs = call_args[1]
+        assert kwargs["frequency_penalty"] == 0.3
+        assert kwargs["presence_penalty"] == 0.2

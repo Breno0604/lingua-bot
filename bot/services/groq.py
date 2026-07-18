@@ -21,6 +21,19 @@ from bot.config import Config
 logger = logging.getLogger(__name__)
 
 # ──────────────────────────────────────────────
+# Parâmetros por Nível
+# ──────────────────────────────────────────────
+
+LEVEL_PARAMS = {
+    "A1": {"temperature": 0.5, "top_p": 0.9, "max_tokens": 200},
+    "A2": {"temperature": 0.7, "top_p": 0.95, "max_tokens": 300},
+    "B1": {"temperature": 0.8, "top_p": 0.95, "max_tokens": 400},
+}
+
+FREQUENCY_PENALTY = 0.3
+PRESENCE_PENALTY = 0.2
+
+# ──────────────────────────────────────────────
 # System Prompts por Nivel
 # ──────────────────────────────────────────────
 
@@ -248,6 +261,7 @@ class GroqService:
                     None,
                     self._sync_generate,
                     messages,
+                    level,
                 )
                 if response and response.choices:
                     content = response.choices[0].message.content
@@ -277,13 +291,17 @@ class GroqService:
 
         return None
 
-    def _sync_generate(self, messages: list[dict]) -> ChatCompletion:
+    def _sync_generate(self, messages: list[dict], level: str = "A1") -> ChatCompletion:
         client = self._get_client()
+        params = LEVEL_PARAMS.get(level, LEVEL_PARAMS["A1"])
         response = client.chat.completions.create(
             model=self.model,
             messages=messages,
-            temperature=0.7,
-            max_tokens=400,
+            temperature=params["temperature"],
+            top_p=params["top_p"],
+            max_tokens=params["max_tokens"],
+            frequency_penalty=FREQUENCY_PENALTY,
+            presence_penalty=PRESENCE_PENALTY,
         )
         return response
 
