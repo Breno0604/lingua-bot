@@ -7,8 +7,11 @@ Verifica comprimento, vocabulário e estrutura por nível.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -49,7 +52,9 @@ class ResponseValidator:
                     for line in words_file.read_text().splitlines()
                     if line.strip()
                 }
+                logger.debug("Loaded %d words from %s", len(self._top_800_words), words_file)
             else:
+                logger.warning("Data file not found: %s — A1 vocabulary validation disabled", words_file)
                 self._top_800_words = set()
         return self._top_800_words
 
@@ -63,7 +68,9 @@ class ResponseValidator:
                     for line in idioms_file.read_text().splitlines()
                     if line.strip()
                 }
+                logger.debug("Loaded %d idioms from %s", len(self._idioms_to_avoid), idioms_file)
             else:
+                logger.warning("Data file not found: %s — A2 idiom validation disabled", idioms_file)
                 self._idioms_to_avoid = set()
         return self._idioms_to_avoid
 
@@ -71,7 +78,7 @@ class ResponseValidator:
         self,
         reply: str,
         level: str,
-        user_message: str,
+        user_message: str,  # TODO: kept for future context-aware validation (e.g. relevance check)
     ) -> ValidationResult:
         """
         Valida uma resposta gerada pelo LLM.
@@ -125,6 +132,8 @@ class ResponseValidator:
                     issues.append("idiom_found")
 
         structure_ok = word_count >= 3
+        if not structure_ok:
+            issues.append("too_short")
 
         score = (
             (self.WEIGHT_LENGTH if length_ok else 0.0) +

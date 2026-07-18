@@ -105,7 +105,8 @@ class TestResponseValidator:
             level="A1",
             user_message="Hello"
         )
-        assert 0.0 <= result.score <= 1.0
+        # Great! = 1 word: length_ok (0.4) + vocab_ok=False since "great" not in top_800 (0.0) + structure_ok=False (0.0) = 0.4
+        assert result.score == pytest.approx(0.4)
 
     def test_empty_reply_invalid(self):
         """Resposta vazia é inválida."""
@@ -157,3 +158,14 @@ class TestResponseValidator:
         assert result.is_valid is True
         assert result.issues == []
         assert result.score == 0.8
+
+    def test_too_short_reply(self):
+        """Resposta com menos de 3 palavras reporta too_short."""
+        validator = ResponseValidator()
+        result = validator.validate(
+            reply="Hi",
+            level="A1",
+            user_message="Hello"
+        )
+        assert "too_short" in result.issues
+        assert result.score == pytest.approx(0.8)
